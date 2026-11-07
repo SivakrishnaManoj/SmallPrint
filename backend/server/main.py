@@ -9,7 +9,7 @@ import json
 import random
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
@@ -60,6 +60,10 @@ async def company_source(request: AnalyseRequest, fixture: dict) -> dict:
 # Card emission order
 # ---------------------------------------------------------------------------
 
+# Delay between mock cards, in seconds, so the panel shows cards streaming in.
+# Tests set this to (0, 0); see server/tests/conftest.py.
+CARD_DELAY_SECONDS: tuple[float, float] = (0.3, 0.8)
+
 _CARD_ORDER = ["item", "price_drift", "cost", "lock_in", "small_print", "company"]
 
 _CARD_PAYLOAD_MAP = {
@@ -87,7 +91,7 @@ def _card_state(card: str, result: dict) -> str:
 
 async def _stream_cards(result: dict) -> AsyncGenerator[dict, None]:
     for card in _CARD_ORDER:
-        await asyncio.sleep(random.uniform(0.3, 0.8))
+        await asyncio.sleep(random.uniform(*CARD_DELAY_SECONDS))
         payload = _CARD_PAYLOAD_MAP[card](result)
         state = _card_state(card, result)
         yield {
@@ -107,8 +111,16 @@ async def health() -> dict:
 
 
 @app.post("/analyse")
-async def analyse(request: AnalyseRequest, http_request: Request) -> EventSourceResponse:
-    if not rate_check(request.install_id):
+async def analyse(
+    request: AnalyseRequest,
+    http_request: Request,
+    x_install_id: str | None = Header(default=None),
+) -> EventSourceResponse:
+    # Install UUID comes from the X-Install-Id header; the body field is a fallback.
+    install_id = (x_install_id or "").strip() or request.install_id
+    if not install_id:
+        raise HTTPException(status_code=422, detail="Missing X-Install-Id header")
+    if not rate_check(install_id):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     fixture = pick_fixture(request.item.url, request.item.name)
