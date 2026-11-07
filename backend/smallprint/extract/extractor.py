@@ -191,6 +191,9 @@ async def _extract_chunk(client: AsyncAnthropic, chunk: str, install_id: str | N
 class Document:
     url: str
     text: str
+    # None: fetched by the user's browser. Otherwise how we got it, e.g. "tavily_search";
+    # every value from this document is labelled with it (source_step).
+    source: str | None = None
 
 
 async def extract_fields(client: AsyncAnthropic, docs: list[Document], install_id: str | None = None,
@@ -212,7 +215,7 @@ async def extract_fields(client: AsyncAnthropic, docs: list[Document], install_i
             except SpendLimitReached:
                 return found, True
             for name, item in verify_extraction(raw, chunk).items():
-                found.setdefault(name, {**item, "url": doc.url})
+                found.setdefault(name, {**item, "url": doc.url, "source": doc.source})
     return found, False
 
 
@@ -220,8 +223,15 @@ async def extract_fields(client: AsyncAnthropic, docs: list[Document], install_i
 # Cards
 # ---------------------------------------------------------------------------
 
+def _labelled(row: dict, f: dict) -> dict:
+    """Add source_step when the value came from a fallback source (e.g. search)."""
+    if f.get("source"):
+        row["source_step"] = f["source"]
+    return row
+
+
 def _evidence(f: dict) -> dict:
-    return {"quote": f["quote"], "url": f["url"]}
+    return _labelled({"quote": f["quote"], "url": f["url"]}, f)
 
 
 def build_cards(found: dict[str, dict], limit_reached: bool = False) -> dict:
@@ -253,12 +263,13 @@ def build_cards(found: dict[str, dict], limit_reached: bool = False) -> dict:
     lock_in: dict[str, Any] = {name: found[name]["value"] if name in found else None for name in LOCK_IN_FIELDS}
     # Contract: one {field, quote, url} entry per non-null lock-in field.
     lock_in["evidence"] = [
-        {"field": name, "quote": found[name]["quote"], "url": found[name]["url"]}
+        _labelled({"field": name, "quote": found[name]["quote"], "url": found[name]["url"]}, found[name])
         for name in LOCK_IN_FIELDS if name in found
     ]
 
     small_print = [
-        {"field": label, "value": _as_text(found[name]["value"]), "quote": found[name]["quote"], "url": found[name]["url"]}
+        _labelled({"field": label, "value": _as_text(found[name]["value"]), "quote": found[name]["quote"],
+                   "url": found[name]["url"]}, found[name])
         for name, label in SMALL_PRINT_LABELS.items() if name in found
     ]
 
