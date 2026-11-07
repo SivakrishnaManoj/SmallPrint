@@ -104,7 +104,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   horizon: 12,
-  recordKinds: ["political_donations", "gender_pay_gap", "regulator_decisions", "modern_slavery", "b_corp"],
+  recordKinds: ["political_donations", "gender_pay_gap", "nmw_underpayment", "prompt_payment", "modern_slavery", "regulator_decisions"],
 };
 
 export interface AnalyseRequest {

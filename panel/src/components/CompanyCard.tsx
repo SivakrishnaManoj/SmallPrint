@@ -11,6 +11,8 @@ interface Props {
 const KIND_LABELS: Record<string, string> = {
   gender_pay_gap: "Gender pay gap",
   donation: "Political donation",
+  nmw_underpayment: "Minimum wage violation",
+  prompt_payment: "Late payment to suppliers",
   modern_slavery: "Modern slavery statement",
   regulator_decision: "Regulator decision",
 };

@@ -10,9 +10,10 @@ interface Props {
 const RECORD_KIND_OPTIONS = [
   { id: "political_donations", label: "Political donations" },
   { id: "gender_pay_gap", label: "Gender pay gap" },
-  { id: "regulator_decisions", label: "Regulator decisions" },
+  { id: "nmw_underpayment", label: "Minimum wage violations" },
+  { id: "prompt_payment", label: "Late payment to suppliers" },
   { id: "modern_slavery", label: "Modern slavery statements" },
-  { id: "b_corp", label: "B Corp certification" },
+  { id: "regulator_decisions", label: "Regulator decisions" },
 ];
 
 export function FirstRunForm({ onComplete }: Props) {
