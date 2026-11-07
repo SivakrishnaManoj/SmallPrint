@@ -2,10 +2,15 @@
 
 POST /analyse  — streams SSE card events from fixtures (integration stubs below)
 GET  /health   — liveness check
+
+To switch to the real pipeline at 22:30, set the env var:
+    SMALLPRINT_LIVE=1
+Both modules must be importable (Person 2 and 3 hand-off complete).
 """
 from __future__ import annotations
 import asyncio
 import json
+import os
 import random
 from typing import AsyncGenerator
 
@@ -17,6 +22,25 @@ from .fixtures import pick_fixture
 from .models import AnalyseRequest
 from .rate_limit import check as rate_check
 
+# ---------------------------------------------------------------------------
+# Live pipeline — imported lazily so the server starts even if not ready yet
+# ---------------------------------------------------------------------------
+
+LIVE = os.getenv("SMALLPRINT_LIVE", "").strip() == "1"
+
+_analyse_terms = None
+_company_lookup = None
+
+if LIVE:
+    try:
+        from smallprint.terms import analyse_terms as _analyse_terms  # type: ignore[assignment]
+    except ImportError as e:
+        raise RuntimeError("SMALLPRINT_LIVE=1 but smallprint.terms is not available") from e
+    try:
+        from smallprint.company import company_lookup as _company_lookup  # type: ignore[assignment]
+    except ImportError as e:
+        raise RuntimeError("SMALLPRINT_LIVE=1 but smallprint.company is not available") from e
+
 app = FastAPI(title="SmallPrint API", version="0.1.0")
 
 app.add_middleware(
@@ -27,16 +51,18 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Integration stubs — replace these with real module calls at H6
+# Source functions — fixture stubs when LIVE=False, real pipeline when LIVE=True
 # ---------------------------------------------------------------------------
 
 async def terms_source(request: AnalyseRequest, fixture: dict) -> dict:
-    """Stub: returns cost_streams, lock_in and small_print slices from fixture.
-
-    Real implementation will call:
-        from smallprint.terms import analyse_terms
-        return await analyse_terms(request)
-    """
+    if LIVE and _analyse_terms is not None:
+        result = await asyncio.to_thread(_analyse_terms, request.model_dump())
+        return {
+            "cost_streams": result.get("cost_streams", []),
+            "lock_in": result.get("lock_in", {}),
+            "small_print": result.get("small_print", []),
+            "card_states_terms": result.get("card_states", {}),
+        }
     return {
         "cost_streams": fixture.get("cost_streams", []),
         "lock_in": fixture.get("lock_in", {}),
@@ -45,14 +71,11 @@ async def terms_source(request: AnalyseRequest, fixture: dict) -> dict:
 
 
 async def company_source(request: AnalyseRequest, fixture: dict) -> dict:
-    """Stub: returns company slice from fixture.
-
-    Real implementation will call:
-        from smallprint.company import company_lookup
+    if LIVE and _company_lookup is not None:
         brand = request.item.brand or ""
-        domain = request.item.url
-        return await company_lookup(brand, domain)
-    """
+        domain = str(request.item.url or "")
+        result = await asyncio.to_thread(_company_lookup, brand, domain)
+        return {"company": result, "card_states_company": {"company": "found" if result.get("ch_number") else "not_found"}}
     return {"company": fixture.get("company", {})}
 
 
@@ -119,7 +142,12 @@ async def analyse(request: AnalyseRequest, http_request: Request) -> EventSource
         company_source(request, fixture),
     )
 
-    # Merge stub results back into the fixture so card states remain consistent
-    result = {**fixture, **terms_result, **company_result}
+    # Merge results; live pipeline supplies its own card_states, stubs use fixture's
+    card_states = {
+        **fixture.get("card_states", {}),
+        **terms_result.pop("card_states_terms", {}),
+        **company_result.pop("card_states_company", {}),
+    }
+    result = {**fixture, **terms_result, **company_result, "card_states": card_states}
 
     return EventSourceResponse(_stream_cards(result))
