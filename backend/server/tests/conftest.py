@@ -28,6 +28,7 @@ def mock_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main, "_llm_client", None)
     monkeypatch.setattr(main, "_search", None)
     monkeypatch.delenv("SMALLPRINT_PREWARM_KEY", raising=False)
+    monkeypatch.delenv("SMALLPRINT_REFILL", raising=False)  # gated feature: tests opt in
     # A fresh T&C cache per test, so one test's extraction never serves another.
     fresh = TermsCache()
     monkeypatch.setattr(main, "get_cache", lambda: fresh)

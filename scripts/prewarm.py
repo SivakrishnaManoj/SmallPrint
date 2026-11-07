@@ -41,7 +41,8 @@ TERMS_CARDS = ("cost", "lock_in", "small_print")
 
 def read_list(path: Path) -> list[dict]:
     with path.open(newline="", encoding="utf-8") as f:
-        rows = [{k: (v or "").strip() for k, v in r.items()} for r in csv.DictReader(f)]
+        # k is None for overflow cells (e.g. commas in a comment row): ignore them.
+        rows = [{k: (v or "").strip() for k, v in r.items() if k is not None} for r in csv.DictReader(f)]
     return [r for r in rows if r.get("page_url") and not r["page_url"].startswith("#")]
 
 

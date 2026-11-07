@@ -17,11 +17,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import AsyncGenerator, Awaitable, Callable
 
 from anthropic import AsyncAnthropic
 
 from smallprint.extract import Document, build_cards, extract_fields, html_to_text, pdf_b64_to_text
+from smallprint.refill import find_refill
 from smallprint.search_fallback import MAX_SEARCHES_PER_REQUEST, TavilySearch, site_of
 from smallprint.spend import SpendTracker
 from smallprint.tc_cache import TermsCache
@@ -32,6 +34,11 @@ log = logging.getLogger(__name__)
 
 # Extraction must stream within ~20 s (CLAUDE.md); give up a little after that.
 TERMS_TIMEOUT_S = 25.0
+
+
+def refill_enabled() -> bool:
+    """Refill cost (S8) is gated: off unless SMALLPRINT_REFILL=1, set only if the H10 gate passes."""
+    return os.environ.get("SMALLPRINT_REFILL", "").strip().lower() in ("1", "true", "on", "yes")
 
 Card = tuple[str, str, object]  # (card, state, payload)
 
@@ -148,8 +155,30 @@ async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncAn
         merged = {**found_terms, **found_page}
         return build_cards(merged, limit_page or limit_terms)
 
-    # One budget for search + extraction, so the cards always resolve in time.
-    result = await asyncio.wait_for(run(), TERMS_TIMEOUT_S)
+    refill_on = refill_enabled() and search is not None and "product" in request.purchase_type_signals
+
+    async def run_refill() -> dict | None:
+        try:
+            return await find_refill(client, search, name=request.item.name, brand=request.item.brand,
+                                     page_url=request.item.url, install_id=install_id, tracker=tracker, cache=cache)
+        except Exception:
+            log.exception("refill lookup failed")
+            return None
+
+    async def run_all() -> dict | None:
+        if refill_on:
+            result, refill = await asyncio.gather(run(), run_refill())
+        else:
+            result, refill = await run(), None
+        if refill:
+            result = result or build_cards({})
+            result["cost_streams"].append(refill)
+            if result["card_states"]["cost"] != "found":
+                result["card_states"]["cost"] = "estimated"  # only the refill estimate on this card
+        return result
+
+    # One budget for search, extraction and refill, so the cards always resolve in time.
+    result = await asyncio.wait_for(run_all(), TERMS_TIMEOUT_S)
     if result is None:
         return _not_found(TERMS_CARDS)
     states = result["card_states"]
