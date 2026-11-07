@@ -13,3 +13,6 @@ coverage.xml
 .coverage
 results/
 data/rawData/
+
+# Project instructions are kept local, not shared via git
+CLAUDE.md
