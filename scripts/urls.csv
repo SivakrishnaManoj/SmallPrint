@@ -1,0 +1,41 @@
+url,expected_type,notes
+https://www.amazon.co.uk/dp/B09QYK3LZX,product,SodaStream Terra
+https://www.amazon.co.uk/dp/B09WFC9KNT,product,Canon PIXMA inkjet printer
+https://www.amazon.co.uk/dp/B0CL5ZTP1N,product,Nespresso Vertuo Next coffee machine
+https://www.amazon.co.uk/dp/B09LK3B5NW,product,Gillette Fusion 5 razor
+https://www.amazon.co.uk/dp/B0CWB8GHFT,product,Ninja air fryer
+https://www.amazon.co.uk/dp/B09GWM37L4,product,Kindle Paperwhite
+https://www.amazon.co.uk/dp/B09DRYJX2K,product,Instant Pot Duo
+https://www.amazon.co.uk/dp/B08H93ZRK9,product,Oral-B electric toothbrush
+https://www.amazon.co.uk/dp/B09X7FXHVJ,product,DeLonghi coffee grinder
+https://www.amazon.co.uk/dp/B0D5NW2WR8,product,Breville toasted sandwich maker
+https://www.amazon.co.uk/dp/B0C7VWWP8K,product,WaterPik flosser — may 404 check manually
+https://www.amazon.co.uk/dp/B08BHWPXKW,product,LEGO Technic
+https://www.argos.co.uk/product/4219425,product,Samsung QLED TV on Argos
+https://www.currys.co.uk/products/dyson-v15-detect-absolute-vacuum-cleaner-10249571.html,product,Dyson V15 on Currys — URL may need refreshing
+https://www.johnlewis.com/john-lewis-anyday-9kg-1400rpm-freestanding-washing-machine/p5856988,product,JL washing machine
+https://www.prettylittlething.com/pink-satin-slip-midi-dress.html,product,Shopify-style store example — may 404 check manually
+https://www.ebay.co.uk/itm/205379218123,product,eBay listing — ID may expire
+https://www.etsy.com/uk/listing/1234567890,product,Etsy listing — ID placeholder; replace with real one
+https://www.netflix.com/gb/signup,subscription,Netflix signup page
+https://www.spotify.com/gb/premium/,subscription,Spotify Premium
+https://www.disneyplus.com/en-gb/sign-up,subscription,Disney+ signup
+https://www.puregym.com/join/,subscription,PureGym monthly no-contract
+https://www.thegymgroup.com/join/,subscription,The Gym Group
+https://www.hellofresh.co.uk/plans,subscription,HelloFresh meal kits
+https://www.audible.co.uk/ep/whats-audible,subscription,Audible UK
+https://www.microsoft.com/en-gb/microsoft-365/personal,subscription,Microsoft 365 Personal
+https://www.bt.com/broadband/full-fibre/,contract,BT Full Fibre broadband
+https://www.sky.com/shop/broadband,contract,Sky Broadband
+https://www.virginmedia.com/broadband,contract,Virgin Media broadband
+https://www.vodafone.co.uk/mobile/phones/pay-monthly-phones,contract,Vodafone mobile contract
+https://www.ee.co.uk/mobile/mobile-phones,contract,EE mobile contract
+https://www.three.co.uk/pay-monthly-phones,contract,Three mobile contract
+https://www.octopusenergy.co.uk/tariffs,contract,Octopus Energy variable tariff
+https://www.autotrader.co.uk/car-finance,contract,AutoTrader car finance/lease — confirm URL
+https://www.bbc.co.uk/news/technology,none,BBC News article page
+https://en.wikipedia.org/wiki/United_Kingdom,none,Wikipedia non-purchase
+https://www.google.com/search?q=best+coffee+maker,none,Google search results
+https://martinfowler.com/articles/microservices.html,none,Martin Fowler blog post
+https://github.com/anthropics/anthropic-sdk-python,none,GitHub repo page
+https://www.gov.uk/check-national-insurance-record,none,gov.uk service page
