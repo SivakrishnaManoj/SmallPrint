@@ -25,10 +25,22 @@
   "lock_in": {
     "min_term_months": null,
     "exit_fee": null,
-    "notice_days": 30,
+    "notice_days": null,
     "auto_renews": true,
     "cancel_method": "Account > Cancel membership on netflix.com",
-    "proprietary_refills": null
+    "proprietary_refills": null,
+    "evidence": [
+      {
+        "field": "auto_renews",
+        "quote": "MOCK: Your Netflix membership is a month-to-month subscription that begins at sign up. We will automatically bill the monthly membership fee to your payment method on the calendar day corresponding to the commencement of your paying membership.",
+        "url": "https://help.netflix.com/legal/termsofuse"
+      },
+      {
+        "field": "cancel_method",
+        "quote": "MOCK: You can cancel your membership at any time by going to Account and selecting Cancel membership.",
+        "url": "https://help.netflix.com/en/node/mock-cancel"
+      }
+    ]
   },
   "small_print": [
     {

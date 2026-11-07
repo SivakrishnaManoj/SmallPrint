@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import Any
-from pydantic import BaseModel, field_validator
+from typing import Any, Literal
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ItemIn(BaseModel):
@@ -23,17 +23,34 @@ class PriceDriftIn(BaseModel):
     current: float | None = None
 
 
-class TermsDocIn(BaseModel):
-    """A T&C / contract document the extension fetched from the user's browser.
+TermsKind = Literal[
+    "terms", "returns", "warranty", "cancel", "subscription",
+    "contract_summary", "price_guide", "privacy", "other",
+]
 
+
+class TermsDocIn(BaseModel):
+    """A T&C page or PDF the extension fetched from the user's browser.
+
+    Mirrors terms_document in contracts/request.schema.json.
     Send ``text`` for HTML pages and ``pdf_b64`` (base64 PDF bytes) for PDFs.
-    If the browser fetch failed, send ``fetch_failed: true`` with no content;
-    the backend then falls back to search and labels the card that way.
+    If the browser fetch failed, send ``fetch_failed: true`` with no content
+    and, optionally, ``error``; the backend then falls back to search and
+    labels the card that way.
     """
+
     url: str
-    text: str | None = None
-    pdf_b64: str | None = None
+    kind: TermsKind = "terms"
+    text: str | None = Field(default=None, max_length=500_000)
+    pdf_b64: str | None = Field(default=None, max_length=20_000_000)
     fetch_failed: bool = False
+    error: str | None = None
+
+    @model_validator(mode="after")
+    def content_present_unless_failed(self) -> "TermsDocIn":
+        if not self.fetch_failed and not self.text and not self.pdf_b64:
+            raise ValueError("text or pdf_b64 is required unless fetch_failed is true")
+        return self
 
 
 class AnalyseRequest(BaseModel):

@@ -40,7 +40,34 @@
     "notice_days": 30,
     "auto_renews": true,
     "cancel_method": "Call 0800 783 1401 or use My BT app",
-    "proprietary_refills": null
+    "proprietary_refills": null,
+    "evidence": [
+      {
+        "field": "min_term_months",
+        "quote": "MOCK: This is a 24-month contract. If you end your contract early you may have to pay an early termination charge.",
+        "url": "https://www.bt.com/broadband/terms"
+      },
+      {
+        "field": "exit_fee",
+        "quote": "MOCK: Early termination charges are calculated as the total monthly fees remaining on your contract, up to a maximum of £215.",
+        "url": "https://www.bt.com/broadband/terms"
+      },
+      {
+        "field": "notice_days",
+        "quote": "MOCK: You must give us at least 30 days' notice to cancel after your minimum term.",
+        "url": "https://www.bt.com/broadband/terms"
+      },
+      {
+        "field": "auto_renews",
+        "quote": "MOCK: Your contract will automatically renew at the end of the minimum term unless you tell us you want to leave.",
+        "url": "https://www.bt.com/broadband/terms"
+      },
+      {
+        "field": "cancel_method",
+        "quote": "MOCK: You can cancel by calling 0800 783 1401 or by using the My BT app.",
+        "url": "https://www.bt.com/broadband/terms"
+      }
+    ]
   },
   "small_print": [
     {
