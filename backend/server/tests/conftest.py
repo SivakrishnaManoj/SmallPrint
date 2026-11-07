@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from server import main
+from smallprint.tc_cache import TermsCache
 
 
 @pytest.fixture(autouse=True)
@@ -26,3 +27,7 @@ def mock_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.setattr(main, "_llm_client", None)
     monkeypatch.setattr(main, "_search", None)
+    monkeypatch.delenv("SMALLPRINT_PREWARM_KEY", raising=False)
+    # A fresh T&C cache per test, so one test's extraction never serves another.
+    fresh = TermsCache()
+    monkeypatch.setattr(main, "get_cache", lambda: fresh)

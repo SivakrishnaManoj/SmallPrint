@@ -69,12 +69,20 @@ class SpendTracker:
     daily_limit_usd: float = DEFAULT_DAILY_LIMIT_USD
     today: Callable[[], str] = _utc_day
     _spent: dict[tuple[str, str], float] = field(default_factory=dict)
+    # Per-install overrides of daily_limit_usd (used for the pre-warm run).
+    _limits: dict[str, float] = field(default_factory=dict)
+
+    def limit_for(self, install_id: str) -> float:
+        return self._limits.get(install_id, self.daily_limit_usd)
+
+    def set_limit(self, install_id: str, usd: float) -> None:
+        self._limits[install_id] = usd
 
     def spent(self, install_id: str) -> float:
         return self._spent.get((install_id, self.today()), 0.0)
 
     def remaining(self, install_id: str) -> float:
-        return max(0.0, self.daily_limit_usd - self.spent(install_id))
+        return max(0.0, self.limit_for(install_id) - self.spent(install_id))
 
     @asynccontextmanager
     async def guard(self, install_id: str, input_tokens: int, max_output_tokens: int = MAX_OUTPUT_TOKENS) -> AsyncIterator[Usage]:
@@ -92,10 +100,11 @@ class SpendTracker:
         key = (install_id, self.today())
         reserved = call_cost(input_tokens, max_output_tokens)
         before = self._spent.get(key, 0.0)
-        if before + reserved > self.daily_limit_usd:
+        limit = self.limit_for(install_id)
+        if before + reserved > limit:
             log.warning("spend limit reached install=%s day=%s spent=$%.4f limit=$%.2f",
-                        _short(install_id), key[1], before, self.daily_limit_usd)
-            raise SpendLimitReached(f"daily limit ${self.daily_limit_usd:.2f} reached")
+                        _short(install_id), key[1], before, limit)
+            raise SpendLimitReached(f"daily limit ${limit:.2f} reached")
         # No await between the check and the reservation, so this is atomic in asyncio.
         self._spent[key] = before + reserved
 
@@ -108,7 +117,7 @@ class SpendTracker:
         else:
             actual = reserved
         log.info("spend install=%s day=%s call=$%.5f total=$%.4f limit=$%.2f",
-                 _short(install_id), key[1], actual, self._spent[key], self.daily_limit_usd)
+                 _short(install_id), key[1], actual, self._spent[key], limit)
 
 
 # Shared by the app. Tests make their own.

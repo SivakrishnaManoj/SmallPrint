@@ -19,6 +19,7 @@ from typing import Any
 from anthropic import AsyncAnthropic
 
 from smallprint.spend import MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS, SpendLimitReached, SpendTracker
+from smallprint.tc_cache import TermsCache
 from smallprint.verify import verify_field
 
 from .text import CHUNK_TOKENS, chunk_text, estimate_tokens
@@ -150,7 +151,8 @@ def verify_extraction(raw: dict[str, Any], source: str) -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 
 async def _extract_chunk(client: AsyncAnthropic, chunk: str, install_id: str | None,
-                         tracker: SpendTracker | None) -> dict[str, Any]:
+                         tracker: SpendTracker | None) -> dict[str, Any] | None:
+    """The model's JSON for one chunk, or None if this chunk failed (refusal, cut off, bad JSON)."""
     input_tokens = _SYSTEM_TOKENS + estimate_tokens(chunk)
     if input_tokens > MAX_INPUT_TOKENS:
         raise ValueError("chunk exceeds the 8k input cap")
@@ -175,16 +177,16 @@ async def _extract_chunk(client: AsyncAnthropic, chunk: str, install_id: str | N
     if response.stop_reason != "end_turn":
         # refusal, max_tokens, ...: treat the chunk as giving nothing.
         log.warning("extractor stop_reason=%s; chunk skipped", response.stop_reason)
-        return {}
+        return None
     text = next((b.text for b in response.content if b.type == "text"), None)
     if not text:
-        return {}
+        return None
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
         log.warning("extractor returned invalid JSON; chunk skipped")
-        return {}
-    return data if isinstance(data, dict) else {}
+        return None
+    return data if isinstance(data, dict) else None
 
 
 @dataclass
@@ -197,25 +199,48 @@ class Document:
 
 
 async def extract_fields(client: AsyncAnthropic, docs: list[Document], install_id: str | None = None,
-                         tracker: SpendTracker | None = None) -> tuple[dict[str, dict], bool]:
+                         tracker: SpendTracker | None = None,
+                         cache: TermsCache | None = None) -> tuple[dict[str, dict], bool]:
     """Verified fields across all documents. First verified value per field wins.
 
     With a ``tracker``, every call is charged to ``install_id``; once the daily
     limit is reached no further calls are made.
 
-    Returns ({field: {"value", "quote", "url"}}, limit_reached).
+    With a ``cache``, a document whose exact text was extracted before is served
+    from the cache with no LLM call, and a fully extracted document is stored.
+    A document is only stored if every chunk succeeded, so a refusal or a spend
+    limit hit is never cached as "nothing found".
+
+    Returns ({field: {"value", "quote", "url", "source"}}, limit_reached).
     """
     found: dict[str, dict] = {}
     for doc in docs:
+        cached = cache.get_doc(doc.url, doc.text, doc.source) if cache else None
+        if cached is not None:
+            for name, item in cached.items():
+                found.setdefault(name, item)
+            continue
+
+        doc_fields: dict[str, dict] = {}
+        complete = True
         # Chunk size leaves room for the system prompt and schema inside the 8k cap.
         chunk_tokens = min(CHUNK_TOKENS, MAX_INPUT_TOKENS - _SYSTEM_TOKENS)
         for chunk in chunk_text(doc.text, chunk_tokens):
             try:
                 raw = await _extract_chunk(client, chunk, install_id, tracker)
             except SpendLimitReached:
+                for name, item in doc_fields.items():
+                    found.setdefault(name, item)
                 return found, True
+            if raw is None:
+                complete = False
+                continue
             for name, item in verify_extraction(raw, chunk).items():
-                found.setdefault(name, {**item, "url": doc.url, "source": doc.source})
+                doc_fields.setdefault(name, {**item, "url": doc.url, "source": doc.source})
+        if cache and complete:
+            cache.put_doc(doc.url, doc.text, doc.source, doc_fields)
+        for name, item in doc_fields.items():
+            found.setdefault(name, item)
     return found, False
 
 
