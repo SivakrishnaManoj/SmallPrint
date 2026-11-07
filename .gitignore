@@ -12,3 +12,4 @@ venv/
 coverage.xml
 .coverage
 results/
+data/rawData/
