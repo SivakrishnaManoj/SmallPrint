@@ -4,7 +4,7 @@
   "title": "AnalyseRequest",
   "description": "Body POSTed by the extension to /analyse",
   "type": "object",
-  "required": ["item", "purchase_type_signals", "links", "page_text_snippets", "price_drift", "install_id"],
+  "required": ["item", "purchase_type_signals", "links", "page_text_snippets", "price_drift"],
   "additionalProperties": false,
   "properties": {
     "item": {
@@ -54,44 +54,37 @@
       }
     },
     "terms": {
-      "description": "T&C pages and PDFs fetched by the extension from the user's browser. Optional: omit it, or send an entry with fetch_status 'failed', and the backend falls back to search and labels the card.",
+      "description": "T&C pages and PDFs fetched by the extension from the user's browser. Optional: omit it, or send an entry with fetch_failed true, and the backend falls back to search and labels the card.",
       "type": "array",
       "items": { "$ref": "#/$defs/terms_document" },
       "default": []
     },
-    "install_id": { "type": "string", "minLength": 1 }
+    "install_id": { "type": "string", "minLength": 1, "description": "Deprecated: send the X-Install-Id header instead." }
   },
   "$defs": {
     "terms_document": {
       "type": "object",
-      "required": ["url", "fetch_status"],
+      "required": ["url"],
       "additionalProperties": false,
       "properties": {
         "url":  { "type": "string", "format": "uri" },
         "kind": {
           "type": "string",
-          "enum": ["terms", "returns", "warranty", "cancel", "subscription", "contract_summary", "price_guide", "privacy", "other"]
+          "enum": ["terms", "returns", "warranty", "cancel", "subscription", "contract_summary", "price_guide", "privacy", "other"],
+          "default": "terms"
         },
-        "fetch_status": { "type": "string", "enum": ["ok", "failed"] },
-        "content_type": { "type": "string", "enum": ["text", "pdf"] },
-        "text":         { "type": "string", "maxLength": 500000 },
-        "pdf_base64":   { "type": "string", "maxLength": 20000000 },
+        "text":         { "type": ["string", "null"], "maxLength": 500000, "description": "Page text, for HTML pages." },
+        "pdf_b64":      { "type": ["string", "null"], "maxLength": 20000000, "contentEncoding": "base64", "description": "Base64 PDF bytes, for PDFs." },
+        "fetch_failed": { "type": "boolean", "default": false },
         "error":        { "type": ["string", "null"], "description": "Why the fetch failed, for display and logs." }
       },
-      "allOf": [
-        {
-          "if":   { "properties": { "fetch_status": { "const": "ok" } }, "required": ["fetch_status"] },
-          "then": { "required": ["content_type"] }
-        },
-        {
-          "if":   { "properties": { "content_type": { "const": "text" } }, "required": ["content_type"] },
-          "then": { "required": ["text"] }
-        },
-        {
-          "if":   { "properties": { "content_type": { "const": "pdf" } }, "required": ["content_type"] },
-          "then": { "required": ["pdf_base64"] }
-        }
-      ]
+      "if":   { "not": { "properties": { "fetch_failed": { "const": true } }, "required": ["fetch_failed"] } },
+      "then": {
+        "anyOf": [
+          { "required": ["text"],    "properties": { "text":    { "type": "string", "minLength": 1 } } },
+          { "required": ["pdf_b64"], "properties": { "pdf_b64": { "type": "string", "minLength": 1 } } }
+        ]
+      }
     }
   }
 }

@@ -42,15 +42,15 @@ The extension fetches T&C pages and PDFs from the user's browser and sends them 
 ```json
 {
   "terms": [
-    {"url": "https://example.com/terms", "kind": "terms", "fetch_status": "ok", "content_type": "text", "text": "..."},
-    {"url": "https://example.com/terms.pdf", "kind": "terms", "fetch_status": "ok", "content_type": "pdf", "pdf_base64": "..."},
-    {"url": "https://example.com/blocked", "kind": "terms", "fetch_status": "failed", "error": "HTTP 403"}
+    {"url": "https://example.com/terms", "kind": "terms", "text": "..."},
+    {"url": "https://example.com/terms.pdf", "kind": "terms", "pdf_b64": "..."},
+    {"url": "https://example.com/blocked", "kind": "terms", "fetch_failed": true, "error": "HTTP 403"}
   ]
 }
 ```
 
-- `fetch_status: "ok"` requires `content_type`. `text` requires `text` (up to 500,000 characters). `pdf` requires `pdf_base64` (up to 20 MB).
-- `fetch_status: "failed"` tells the backend to fall back to Tavily search and label the card with its source.
+- Send `text` for an HTML page (up to 500,000 characters) or `pdf_b64` for a PDF (base64, up to 20 MB). A document that is not marked `fetch_failed` must have one of them.
+- `fetch_failed: true` tells the backend to fall back to Tavily search and label the card with its source. `error` says why, for display and logs.
 - No user-agent rotation or other bot evasion. If a fetch fails, report it as failed.
 
 ## Check a file

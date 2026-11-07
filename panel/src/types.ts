@@ -134,10 +134,11 @@ export interface AnalyseRequest {
   purchase_type_signals: string[];
   links: { url: string; text: string; kind: string }[];
   page_text_snippets: string[];
-  /** T&C pages and PDFs fetched in the browser. Optional; a failed fetch is sent with fetch_status "failed". */
+  /** T&C pages and PDFs fetched in the browser. Optional; a failed fetch is sent with fetch_failed: true. */
   terms?: TermsDocument[];
   price_drift: { first_seen: number | null; current: number | null };
-  install_id: string;
+  /** Deprecated: send the X-Install-Id header instead. */
+  install_id?: string;
 }
 
 export type TermsKind =
@@ -153,6 +154,6 @@ export type TermsKind =
 
 /** Mirrors terms_document in contracts/request.schema.json. */
 export type TermsDocument =
-  | { url: string; kind?: TermsKind; fetch_status: "ok"; content_type: "text"; text: string }
-  | { url: string; kind?: TermsKind; fetch_status: "ok"; content_type: "pdf"; pdf_base64: string }
-  | { url: string; kind?: TermsKind; fetch_status: "failed"; error?: string | null };
+  | { url: string; kind?: TermsKind; text: string; fetch_failed?: false }
+  | { url: string; kind?: TermsKind; pdf_b64: string; fetch_failed?: false }
+  | { url: string; kind?: TermsKind; fetch_failed: true; error?: string | null };

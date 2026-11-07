@@ -162,21 +162,17 @@ def with_terms(*docs: dict) -> dict:
 TEXT_DOC = {
     "url": "https://help.netflix.com/legal/termsofuse",
     "kind": "terms",
-    "fetch_status": "ok",
-    "content_type": "text",
     "text": "Your membership will continue until terminated.",
 }
 PDF_DOC = {
     "url": "https://www.bt.com/terms.pdf",
     "kind": "terms",
-    "fetch_status": "ok",
-    "content_type": "pdf",
-    "pdf_base64": "JVBERi0xLjQK",
+    "pdf_b64": "JVBERi0xLjQK",
 }
 FAILED_DOC = {
     "url": "https://www.example.com/terms",
     "kind": "terms",
-    "fetch_status": "failed",
+    "fetch_failed": True,
     "error": "HTTP 403",
 }
 
@@ -191,22 +187,22 @@ def test_request_accepts_terms_documents(doc: dict) -> None:
     assert not errors, errors
 
 
-def test_ok_text_document_must_have_text() -> None:
+def test_document_without_content_must_be_marked_failed() -> None:
     bad = {k: v for k, v in TEXT_DOC.items() if k != "text"}
     assert list(REQUEST.iter_errors(with_terms(bad)))
 
 
-def test_ok_pdf_document_must_have_bytes() -> None:
-    bad = {k: v for k, v in PDF_DOC.items() if k != "pdf_base64"}
+def test_pdf_document_must_have_bytes() -> None:
+    bad = {k: v for k, v in PDF_DOC.items() if k != "pdf_b64"}
     assert list(REQUEST.iter_errors(with_terms(bad)))
 
 
-def test_unknown_content_type_is_rejected() -> None:
-    assert list(REQUEST.iter_errors(with_terms({**TEXT_DOC, "content_type": "html"})))
+def test_unknown_kind_is_rejected() -> None:
+    assert list(REQUEST.iter_errors(with_terms({**TEXT_DOC, "kind": "brochure"})))
 
 
-def test_unknown_fetch_status_is_rejected() -> None:
-    assert list(REQUEST.iter_errors(with_terms({**FAILED_DOC, "fetch_status": "maybe"})))
+def test_unknown_field_is_rejected() -> None:
+    assert list(REQUEST.iter_errors(with_terms({**FAILED_DOC, "fetch_status": "failed"})))
 
 
 @pytest.fixture
@@ -218,7 +214,7 @@ async def client():
 @pytest.mark.parametrize("doc", [TEXT_DOC, PDF_DOC, FAILED_DOC], ids=["text", "pdf", "failed"])
 async def test_server_accepts_terms_documents(client: AsyncClient, doc: dict) -> None:
     req = with_terms(doc)
-    req["install_id"] = f"contract-test-{doc['fetch_status']}-{doc.get('content_type', 'none')}"
+    req["install_id"] = f"contract-test-{doc['url']}"
     async with client.stream("POST", "/analyse", json=req) as resp:
         assert resp.status_code == 200
 
