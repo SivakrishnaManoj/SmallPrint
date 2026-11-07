@@ -4,6 +4,22 @@
  * A pure function with no network and no DOM. The cost card calls it every time the
  * user changes the horizon, so it runs in the browser. Unreadable input throws
  * `CostModelError`; the caller shows the card as `not_found` instead of a wrong number.
+ *
+ * Rules (the schema does not define these, so they are written down here):
+ *  1. The horizon is 12 or 24 months. Months are numbered from 1.
+ *  2. `one_off` is charged once.
+ *  3. `recurring` is charged in every month from `from_month` (default 1) to `to_month`
+ *     (default: the end of the horizon). A trial price and a full price are two recurring
+ *     streams with different windows.
+ *  4. `step_change` adds its `amount` to the monthly charge from `month` onward. It applies
+ *     only in months where at least one recurring stream is active.
+ *  5. `usage` is `unit_price x units_per_month x months in its window`, once for each of
+ *     low, mid and high. Any usage stream makes the state `estimated`.
+ *  6. The exit fee never changes `total`. `totalIfLeaving` adds it when the horizon ends
+ *     before `minTermMonths`. With no minimum term given, the fee is taken to apply.
+ *  7. A missing required field, an unknown type, a month below 1, or a window that ends
+ *     before it starts is an error. Nothing is guessed or counted as zero.
+ *  8. Totals are rounded to whole pence.
  */
 import type { CardState, CostStream } from "../types";
 
@@ -57,6 +73,17 @@ function validate(streams: readonly CostStream[], horizon: number): void {
       if (stream[field] == null) {
         throw new CostModelError(`cost stream '${label}' is missing '${field}'`);
       }
+    }
+    for (const field of ["from_month", "to_month", "month"] as const) {
+      const value = stream[field];
+      if (value != null && (!Number.isInteger(value) || value < 1)) {
+        throw new CostModelError(`cost stream '${label}' has an invalid '${field}': ${value}`);
+      }
+    }
+    if (stream.from_month != null && stream.to_month != null && stream.from_month > stream.to_month) {
+      throw new CostModelError(
+        `cost stream '${label}' ends (month ${stream.to_month}) before it starts (month ${stream.from_month})`,
+      );
     }
     if (stream.type === "usage") {
       const missing = LEVELS.filter((level) => stream.units_per_month?.[level] == null);

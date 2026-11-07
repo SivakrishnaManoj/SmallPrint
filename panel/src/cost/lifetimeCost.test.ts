@@ -132,6 +132,16 @@ describe("lifetimeCost", () => {
     expect(() => lifetimeCost([recurring(9.99)], 18 as unknown as 12)).toThrow(/horizon/);
   });
 
+  it("rejects a month window that ends before it starts instead of counting zero months", () => {
+    expect(() => lifetimeCost([recurring(9.99, 6, 3)], 12)).toThrow(CostModelError);
+    expect(() => lifetimeCost([recurring(9.99, 6, 3)], 12)).toThrow(/Monthly fee/);
+  });
+
+  it("rejects a month number below 1", () => {
+    expect(() => lifetimeCost([recurring(9.99, 0, 12)], 12)).toThrow(CostModelError);
+    expect(() => lifetimeCost([recurring(30.0, 1, 12), stepChange(3.0, 0)], 12)).toThrow(CostModelError);
+  });
+
   it("rejects a stream without an amount instead of counting it as zero", () => {
     const stream = { label: "Monthly fee", type: "recurring", evidence: EVIDENCE } as CostStream;
 
