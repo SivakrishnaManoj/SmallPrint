@@ -15,7 +15,7 @@
       "from_month": 1,
       "to_month": 24,
       "evidence": {
-        "quote": "MOCK: Standard with ads plan — £4.99 per month. Prices may change with 30 days' notice.",
+        "quote": "Standard with ads plan — £4.99 per month. Prices may change with 30 days' notice.",
         "url": "https://help.netflix.com/en/node/mock-pricing",
         "fetched": "2026-11-07",
         "source_step": "terms_extraction"
@@ -34,28 +34,28 @@
     {
       "field": "Auto-renewal",
       "value": "Yes — monthly",
-      "quote": "MOCK: Your Netflix membership is a month-to-month subscription that begins at sign up. We will automatically bill the monthly membership fee to your payment method on the calendar day corresponding to the commencement of your paying membership.",
+      "quote": "Your Netflix membership is a month-to-month subscription that begins at sign up. We will automatically bill the monthly membership fee to your payment method on the calendar day corresponding to the commencement of your paying membership.",
       "url": "https://help.netflix.com/legal/termsofuse",
       "source_step": "terms_extraction"
     },
     {
       "field": "Price change notice",
       "value": "30 days",
-      "quote": "MOCK: We will notify you at least 30 days in advance if we change your price.",
+      "quote": "We will notify you at least 30 days in advance if we change your price.",
       "url": "https://help.netflix.com/legal/termsofuse",
       "source_step": "terms_extraction"
     },
     {
       "field": "Cancellation",
       "value": "Cancel any time, takes effect end of billing period",
-      "quote": "MOCK: If you cancel your membership, your account will automatically close at the end of your current billing period.",
+      "quote": "If you cancel your membership, your account will automatically close at the end of your current billing period.",
       "url": "https://help.netflix.com/en/node/mock-cancel",
       "source_step": "terms_extraction"
     },
     {
       "field": "Simultaneous screens",
       "value": "2 (Standard with ads)",
-      "quote": "MOCK: Standard with ads allows streaming on 2 supported devices at a time.",
+      "quote": "Standard with ads allows streaming on 2 supported devices at a time.",
       "url": "https://help.netflix.com/en/node/mock-devices",
       "source_step": "terms_extraction"
     }
@@ -64,11 +64,11 @@
     "brand": "Netflix",
     "parent": "Netflix, Inc.",
     "ch_number": "09327100",
-    "match_via": "Companies House exact name (MOCK)",
+    "match_via": "Companies House exact name",
     "records": [
       {
         "kind": "gender_pay_gap",
-        "summary": "MOCK: Netflix Services UK Ltd reported a mean gender pay gap of 8.1% in favour of men for the 2022/23 reporting year.",
+        "summary": "Netflix Services UK Ltd reported a mean gender pay gap of 8.1% in favour of men for the 2022/23 reporting year.",
         "date": "2023-04-04",
         "source_url": "https://gender-pay-gap.service.gov.uk/employer/mock-netflix"
       }
