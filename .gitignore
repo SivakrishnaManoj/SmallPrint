@@ -1,0 +1,14 @@
+.env
+node_modules/
+dist/
+__pycache__/
+*.pyc
+*.sqlite
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+results/
