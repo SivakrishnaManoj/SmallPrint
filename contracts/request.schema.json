@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smallprint.dev/schemas/request",
+  "title": "AnalyseRequest",
+  "description": "Body POSTed by the extension to /analyse",
+  "type": "object",
+  "required": ["item", "purchase_type_signals", "links", "page_text_snippets", "price_drift", "install_id"],
+  "additionalProperties": false,
+  "properties": {
+    "item": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "name":   { "type": ["string", "null"] },
+        "brand":  { "type": ["string", "null"] },
+        "price":  { "type": ["number", "null"] },
+        "seller": { "type": ["string", "null"] },
+        "url":    { "type": "string", "format": "uri" },
+        "id":     { "type": ["string", "null"] }
+      }
+    },
+    "purchase_type_signals": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["product", "subscription", "contract"] }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url", "text", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "url":  { "type": "string", "format": "uri" },
+          "text": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["terms", "returns", "warranty", "cancel", "subscription", "contract_summary", "price_guide", "privacy", "other"]
+          }
+        }
+      }
+    },
+    "page_text_snippets": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "price_drift": {
+      "type": "object",
+      "required": ["first_seen", "current"],
+      "additionalProperties": false,
+      "properties": {
+        "first_seen": { "type": ["number", "null"] },
+        "current":    { "type": ["number", "null"] }
+      }
+    },
+    "install_id": { "type": "string", "minLength": 1 }
+  }
+}

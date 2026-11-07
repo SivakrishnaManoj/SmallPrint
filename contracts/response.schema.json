@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smallprint.dev/schemas/response",
+  "title": "AnalyseResponse",
+  "description": "Full assembled result returned (or streamed) by the backend",
+  "type": "object",
+  "required": ["purchase_types", "item", "cost_streams", "lock_in", "small_print", "company", "price_drift", "card_states"],
+  "additionalProperties": false,
+  "$defs": {
+    "card_state": {
+      "type": "string",
+      "enum": ["found", "estimated", "not_found", "n_a"]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "quote":       { "type": ["string", "null"] },
+        "url":         { "type": ["string", "null"] },
+        "fetched":     { "type": ["string", "null"], "description": "ISO date" },
+        "source_step": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "properties": {
+    "purchase_types": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["product", "subscription", "contract"] }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name":   { "type": ["string", "null"] },
+        "brand":  { "type": ["string", "null"] },
+        "seller": { "type": ["string", "null"] },
+        "url":    { "type": ["string", "null"] },
+        "id":     { "type": ["string", "null"] }
+      }
+    },
+    "cost_streams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "type", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "label":          { "type": "string" },
+          "type":           { "type": "string", "enum": ["one_off", "recurring", "usage", "step_change"] },
+          "amount":         { "type": "number", "description": "one_off, recurring, step_change" },
+          "unit_price":     { "type": "number", "description": "usage streams" },
+          "units_per_month": {
+            "type": "object",
+            "description": "usage streams",
+            "additionalProperties": false,
+            "properties": {
+              "low":  { "type": "number" },
+              "mid":  { "type": "number" },
+              "high": { "type": "number" }
+            }
+          },
+          "from_month": { "type": "integer" },
+          "to_month":   { "type": "integer" },
+          "month":      { "type": "integer", "description": "step_change month" },
+          "evidence":   { "$ref": "#/$defs/evidence" }
+        }
+      }
+    },
+    "lock_in": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_term_months":    { "type": ["integer", "null"] },
+        "exit_fee":           { "type": ["string", "null"] },
+        "notice_days":        { "type": ["integer", "null"] },
+        "auto_renews":        { "type": ["boolean", "null"] },
+        "cancel_method":      { "type": ["string", "null"] },
+        "proprietary_refills":{ "type": ["boolean", "null"] }
+      }
+    },
+    "small_print": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field"],
+        "additionalProperties": false,
+        "properties": {
+          "field":       { "type": "string" },
+          "value":       { "type": ["string", "null"] },
+          "quote":       { "type": ["string", "null"] },
+          "url":         { "type": ["string", "null"] },
+          "source_step": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "company": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "brand":     { "type": ["string", "null"] },
+        "parent":    { "type": ["string", "null"] },
+        "ch_number": { "type": ["string", "null"] },
+        "match_via": { "type": ["string", "null"] },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "summary", "date", "source_url"],
+            "additionalProperties": false,
+            "properties": {
+              "kind":       { "type": "string" },
+              "summary":    { "type": "string" },
+              "date":       { "type": "string" },
+              "source_url": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "price_drift": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "first_seen":  { "type": ["number", "null"] },
+        "at_checkout": { "type": ["number", "null"] },
+        "added": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "amount"],
+            "additionalProperties": false,
+            "properties": {
+              "label":  { "type": "string" },
+              "amount": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "card_states": {
+      "type": "object",
+      "required": ["cost", "lock_in", "small_print", "company", "price_drift"],
+      "additionalProperties": false,
+      "properties": {
+        "cost":        { "$ref": "#/$defs/card_state" },
+        "lock_in":     { "$ref": "#/$defs/card_state" },
+        "small_print": { "$ref": "#/$defs/card_state" },
+        "company":     { "$ref": "#/$defs/card_state" },
+        "price_drift": { "$ref": "#/$defs/card_state" }
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smallprint.dev/schemas/stream-event",
+  "title": "StreamEvent",
+  "description": "Each SSE event from /analyse. Event name is 'card' (with payload) or 'done' (empty).",
+  "oneOf": [
+    {
+      "title": "CardEvent",
+      "description": "event: card",
+      "type": "object",
+      "required": ["card", "state", "payload"],
+      "additionalProperties": false,
+      "properties": {
+        "card": {
+          "type": "string",
+          "enum": ["item", "cost", "lock_in", "small_print", "company", "price_drift"]
+        },
+        "state": {
+          "type": "string",
+          "enum": ["found", "estimated", "not_found", "n_a"]
+        },
+        "payload": {
+          "type": "object",
+          "description": "The corresponding section of the response schema"
+        }
+      }
+    },
+    {
+      "title": "DoneEvent",
+      "description": "event: done",
+      "type": "object",
+      "maxProperties": 0,
+      "additionalProperties": false
+    }
+  ]
+}
