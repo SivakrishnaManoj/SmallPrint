@@ -20,8 +20,8 @@
           "enum": ["found", "estimated", "not_found", "n_a"]
         },
         "payload": {
-          "type": "object",
-          "description": "The corresponding section of the response schema"
+          "description": "The corresponding section of the response schema (object or array)",
+          "type": ["object", "array"]
         }
       }
     },
