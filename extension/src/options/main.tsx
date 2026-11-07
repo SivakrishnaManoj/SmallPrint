@@ -25,7 +25,6 @@ function Options() {
   }
   return (
     <FirstRunForm
-      askPostcode={false}
       initial={initial.settings}
       title={initial.firstRun ? "Set up SmallPrint" : "SmallPrint settings"}
       onComplete={(s) => completeSetup(s).then(() => setSaved(true))}

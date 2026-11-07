@@ -136,7 +136,6 @@ export function App() {
           </header>
         )}
         <FirstRunForm
-          askPostcode={false}
           initial={settings}
           title={setupDone ? "Settings" : "Set up SmallPrint"}
           onComplete={onSettingsDone}
