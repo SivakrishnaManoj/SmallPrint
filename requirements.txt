@@ -1,0 +1,9 @@
+# Railway (Railpack) installs ONLY this file: it copies it alone into the install step,
+# so it cannot include backend/requirements.txt. Add new backend dependencies here too.
+fastapi>=0.111
+uvicorn[standard]>=0.29
+sse-starlette>=2.1
+httpx>=0.27
+jsonschema>=4.22
+pydantic>=2.7
+python-dotenv>=1.0
