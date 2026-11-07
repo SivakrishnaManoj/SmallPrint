@@ -53,6 +53,45 @@
         "current":    { "type": ["number", "null"] }
       }
     },
+    "terms": {
+      "description": "T&C pages and PDFs fetched by the extension from the user's browser. Optional: omit it, or send an entry with fetch_status 'failed', and the backend falls back to search and labels the card.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/terms_document" },
+      "default": []
+    },
     "install_id": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "terms_document": {
+      "type": "object",
+      "required": ["url", "fetch_status"],
+      "additionalProperties": false,
+      "properties": {
+        "url":  { "type": "string", "format": "uri" },
+        "kind": {
+          "type": "string",
+          "enum": ["terms", "returns", "warranty", "cancel", "subscription", "contract_summary", "price_guide", "privacy", "other"]
+        },
+        "fetch_status": { "type": "string", "enum": ["ok", "failed"] },
+        "content_type": { "type": "string", "enum": ["text", "pdf"] },
+        "text":         { "type": "string", "maxLength": 500000 },
+        "pdf_base64":   { "type": "string", "maxLength": 20000000 },
+        "error":        { "type": ["string", "null"], "description": "Why the fetch failed, for display and logs." }
+      },
+      "allOf": [
+        {
+          "if":   { "properties": { "fetch_status": { "const": "ok" } }, "required": ["fetch_status"] },
+          "then": { "required": ["content_type"] }
+        },
+        {
+          "if":   { "properties": { "content_type": { "const": "text" } }, "required": ["content_type"] },
+          "then": { "required": ["text"] }
+        },
+        {
+          "if":   { "properties": { "content_type": { "const": "pdf" } }, "required": ["content_type"] },
+          "then": { "required": ["pdf_base64"] }
+        }
+      ]
+    }
   }
 }

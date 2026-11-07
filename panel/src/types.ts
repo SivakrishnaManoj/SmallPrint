@@ -26,6 +26,21 @@ export interface LockIn {
   auto_renews?: boolean | null;
   cancel_method?: string | null;
   proprietary_refills?: boolean | null;
+  evidence?: LockInEvidence[];
+}
+
+export type LockInField =
+  | "min_term_months"
+  | "exit_fee"
+  | "notice_days"
+  | "auto_renews"
+  | "cancel_method"
+  | "proprietary_refills";
+
+export interface LockInEvidence {
+  field: LockInField;
+  quote: string;
+  url: string;
 }
 
 export interface SmallPrintItem {
@@ -119,6 +134,25 @@ export interface AnalyseRequest {
   purchase_type_signals: string[];
   links: { url: string; text: string; kind: string }[];
   page_text_snippets: string[];
+  /** T&C pages and PDFs fetched in the browser. Optional; a failed fetch is sent with fetch_status "failed". */
+  terms?: TermsDocument[];
   price_drift: { first_seen: number | null; current: number | null };
   install_id: string;
 }
+
+export type TermsKind =
+  | "terms"
+  | "returns"
+  | "warranty"
+  | "cancel"
+  | "subscription"
+  | "contract_summary"
+  | "price_guide"
+  | "privacy"
+  | "other";
+
+/** Mirrors terms_document in contracts/request.schema.json. */
+export type TermsDocument =
+  | { url: string; kind?: TermsKind; fetch_status: "ok"; content_type: "text"; text: string }
+  | { url: string; kind?: TermsKind; fetch_status: "ok"; content_type: "pdf"; pdf_base64: string }
+  | { url: string; kind?: TermsKind; fetch_status: "failed"; error?: string | null };

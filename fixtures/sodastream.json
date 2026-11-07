@@ -36,9 +36,16 @@
     "min_term_months": null,
     "exit_fee": null,
     "notice_days": null,
-    "auto_renews": false,
+    "auto_renews": null,
     "cancel_method": null,
-    "proprietary_refills": true
+    "proprietary_refills": true,
+    "evidence": [
+      {
+        "field": "proprietary_refills",
+        "quote": "MOCK: Use only SodaStream-approved CO2 cylinders. Use of third-party cylinders voids the warranty.",
+        "url": "https://www.sodastream.co.uk/pages/warranty"
+      }
+    ]
   },
   "small_print": [
     {
