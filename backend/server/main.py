@@ -1,21 +1,41 @@
 """FastAPI server for SmallPrint /analyse endpoint.
 
-POST /analyse  — streams SSE card events from fixtures (integration stubs below)
+POST /analyse  — streams SSE card events. Real pipeline (server/pipeline.py) when
+                 ANTHROPIC_API_KEY is set; otherwise the fixtures (mock mode).
 GET  /health   — liveness check
 """
 from __future__ import annotations
 import asyncio
 import json
+import os
 import random
 from typing import AsyncGenerator
 
+from anthropic import AsyncAnthropic
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
+from smallprint.spend import SpendTracker, tracker as default_tracker
+
 from .fixtures import pick_fixture
 from .models import AnalyseRequest
+from .pipeline import stream_real
 from .rate_limit import check as rate_check
+
+_llm_client: AsyncAnthropic | None = None
+
+
+def get_llm_client() -> AsyncAnthropic | None:
+    """The Anthropic client, or None in mock mode (no ANTHROPIC_API_KEY)."""
+    global _llm_client
+    if _llm_client is None and os.environ.get("ANTHROPIC_API_KEY"):
+        _llm_client = AsyncAnthropic()
+    return _llm_client
+
+
+def get_spend_tracker() -> SpendTracker:
+    return default_tracker
 
 app = FastAPI(title="SmallPrint API", version="0.1.0")
 
@@ -123,6 +143,11 @@ async def analyse(
     if not rate_check(install_id):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
+    client = get_llm_client()
+    if client is not None:
+        return EventSourceResponse(stream_real(request, install_id, client, get_spend_tracker()))
+
+    # Mock mode: no API key configured, serve the fixtures.
     fixture = pick_fixture(request.item.url, request.item.name)
 
     # Fan out to source stubs in parallel (mirrors the real asyncio.gather pattern)
