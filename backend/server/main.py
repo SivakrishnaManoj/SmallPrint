@@ -60,6 +60,10 @@ async def company_source(request: AnalyseRequest, fixture: dict) -> dict:
 # Card emission order
 # ---------------------------------------------------------------------------
 
+# Delay between mock cards, in seconds, so the panel shows cards streaming in.
+# Tests set this to (0, 0); see server/tests/conftest.py.
+CARD_DELAY_SECONDS: tuple[float, float] = (0.3, 0.8)
+
 _CARD_ORDER = ["item", "price_drift", "cost", "lock_in", "small_print", "company"]
 
 _CARD_PAYLOAD_MAP = {
@@ -87,7 +91,7 @@ def _card_state(card: str, result: dict) -> str:
 
 async def _stream_cards(result: dict) -> AsyncGenerator[dict, None]:
     for card in _CARD_ORDER:
-        await asyncio.sleep(random.uniform(0.3, 0.8))
+        await asyncio.sleep(random.uniform(*CARD_DELAY_SECONDS))
         payload = _CARD_PAYLOAD_MAP[card](result)
         state = _card_state(card, result)
         yield {
