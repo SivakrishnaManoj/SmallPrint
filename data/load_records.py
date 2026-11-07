@@ -15,7 +15,7 @@ from pathlib import Path
 RAW = Path(__file__).parent / "rawData"
 DB_PATH = Path(__file__).parent / "records.sqlite"
 
-GPG_CSV = RAW / "UK Gender Pay Gap Data - 2026 to 2027.csv"
+GPG_CSVS = sorted(RAW.glob("UK Gender Pay Gap Data*.csv"))
 SLAVERY_CSV = RAW / "StatementSummaries2026.csv"
 DONATIONS_CSV = RAW / "DonationData.csv"
 
@@ -58,9 +58,9 @@ CREATE INDEX IF NOT EXISTS idx_name ON records(company_name COLLATE NOCASE);
 """
 
 
-def load_gpg(cur: sqlite3.Cursor) -> int:
+def load_gpg(cur: sqlite3.Cursor, path: Path) -> int:
     n = 0
-    with open(GPG_CSV, encoding="utf-8-sig", newline="") as f:
+    with open(path, encoding="utf-8-sig", newline="") as f:
         for row in csv.DictReader(f):
             ch = normalise_ch(row.get("CompanyNumber", ""))
             name = (row.get("CurrentName") or row.get("EmployerName", "")).strip()
@@ -74,7 +74,9 @@ def load_gpg(cur: sqlite3.Cursor) -> int:
             except ValueError:
                 continue
             direction = "in favour of men" if pct > 0 else "in favour of women" if pct < 0 else "no gap"
-            summary = f"Mean gender pay gap of {abs(pct):.1f}% {direction} (2026/27 reporting year)."
+            year_label = re.search(r"(\d{4} to \d{4})", path.name)
+            year_str = year_label.group(1) if year_label else "latest"
+            summary = f"Mean gender pay gap of {abs(pct):.1f}% {direction} ({year_str} reporting year)."
             date = row.get("DateSubmitted", "").strip()[:10]
             source_url = row.get("CompanyLinkToGPGInfo", "").strip() or None
             cur.execute(
@@ -148,9 +150,12 @@ def main() -> None:
         if s:
             cur.execute(s)
 
-    print("Loading gender pay gap…", end=" ", flush=True)
-    n = load_gpg(cur)
-    print(f"{n:,} rows")
+    gpg_total = 0
+    for gpg_path in GPG_CSVS:
+        print(f"Loading gender pay gap ({gpg_path.name})…", end=" ", flush=True)
+        n = load_gpg(cur, gpg_path)
+        print(f"{n:,} rows")
+        gpg_total += n
 
     print("Loading modern slavery…", end=" ", flush=True)
     n = load_slavery(cur)
