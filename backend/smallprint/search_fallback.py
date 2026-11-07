@@ -65,12 +65,16 @@ class TavilySearch:
         if not site:
             return []
         query = " ".join(p for p in (name, KIND_QUERY.get(kind, "terms and conditions")) if p)
+        return await self.search(query, [site], SOURCE)
+
+    async def search(self, query: str, sites: list[str], source: str) -> list[Document]:
+        """One Tavily search restricted to ``sites``. Results from any other site are dropped. [] on failure."""
         body = {
             "query": query,
             "search_depth": "basic",
             "max_results": MAX_RESULTS,
             "include_raw_content": "text",
-            "include_domains": [site],
+            "include_domains": sites,
             "topic": "general",
             "country": "united kingdom",
         }
@@ -80,7 +84,7 @@ class TavilySearch:
             resp.raise_for_status()
             results = resp.json().get("results") or []
         except (httpx.HTTPError, ValueError):
-            log.warning("tavily search failed for site=%s", site, exc_info=True)
+            log.warning("tavily search failed for sites=%s", sites, exc_info=True)
             return []
 
         docs: list[Document] = []
@@ -88,12 +92,12 @@ class TavilySearch:
         for r in results:
             url = r.get("url") or ""
             text = r.get("raw_content") or r.get("content") or ""
-            # Defence in depth: Tavily restricts to the domain, but never accept another site.
-            if not url or url in seen or not text.strip() or not _same_site(url, site):
+            # Defence in depth: Tavily restricts the domains, but never accept another site.
+            if not url or url in seen or not text.strip() or not any(_same_site(url, s) for s in sites):
                 continue
             seen.add(url)
-            docs.append(Document(url, text, source=SOURCE))
-        log.info("tavily site=%s results=%d kept=%d", site, len(results), len(docs))
+            docs.append(Document(url, text, source=source))
+        log.info("tavily sites=%s results=%d kept=%d", sites, len(results), len(docs))
         return docs
 
 

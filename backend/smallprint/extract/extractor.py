@@ -151,9 +151,15 @@ def verify_extraction(raw: dict[str, Any], source: str) -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 
 async def _extract_chunk(client: AsyncAnthropic, chunk: str, install_id: str | None,
-                         tracker: SpendTracker | None) -> dict[str, Any] | None:
-    """The model's JSON for one chunk, or None if this chunk failed (refusal, cut off, bad JSON)."""
-    input_tokens = _SYSTEM_TOKENS + estimate_tokens(chunk)
+                         tracker: SpendTracker | None, system: str | None = None,
+                         schema: dict | None = None) -> dict[str, Any] | None:
+    """The model's JSON for one chunk, or None if this chunk failed (refusal, cut off, bad JSON).
+
+    ``system`` and ``schema`` default to the T&C extraction prompt and schema.
+    """
+    system = system or SYSTEM_PROMPT
+    schema = schema or OUTPUT_SCHEMA
+    input_tokens = estimate_tokens(system) + estimate_tokens(json.dumps(schema)) + estimate_tokens(chunk)
     if input_tokens > MAX_INPUT_TOKENS:
         raise ValueError("chunk exceeds the 8k input cap")
 
@@ -161,9 +167,9 @@ async def _extract_chunk(client: AsyncAnthropic, chunk: str, install_id: str | N
         return await client.messages.create(
             model=MODEL,
             max_tokens=MAX_OUTPUT_TOKENS,
-            system=SYSTEM_PROMPT,
+            system=system,
             messages=[{"role": "user", "content": f"<document>\n{chunk}\n</document>"}],
-            output_config={"effort": "low", "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
         )
 
     if tracker is None:

@@ -1,0 +1,14 @@
+url,name,brand
+# The first 10 Amazon products from scripts/urls.csv, as a starting point only.
+# About 6 of these have no consumable to refill (air fryer, Kindle, Instant Pot, grinder, sandwich maker...).
+# The team picks the real 10 (someone who did not build the lookup) and saves them as demo/refill_gate.csv.
+https://www.amazon.co.uk/dp/B09QYK3LZX,SodaStream Terra,SodaStream
+https://www.amazon.co.uk/dp/B09WFC9KNT,Canon PIXMA inkjet printer,Canon
+https://www.amazon.co.uk/dp/B0CL5ZTP1N,Nespresso Vertuo Next coffee machine,Nespresso
+https://www.amazon.co.uk/dp/B09LK3B5NW,Gillette Fusion 5 razor,Gillette
+https://www.amazon.co.uk/dp/B0CWB8GHFT,Ninja air fryer,Ninja
+https://www.amazon.co.uk/dp/B09GWM37L4,Kindle Paperwhite,Kindle
+https://www.amazon.co.uk/dp/B09DRYJX2K,Instant Pot Duo,Instant Pot
+https://www.amazon.co.uk/dp/B08H93ZRK9,Oral-B electric toothbrush,Oral-B
+https://www.amazon.co.uk/dp/B09X7FXHVJ,DeLonghi coffee grinder,DeLonghi
+https://www.amazon.co.uk/dp/B0D5NW2WR8,Breville toasted sandwich maker,Breville

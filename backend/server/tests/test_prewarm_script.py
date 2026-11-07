@@ -30,7 +30,8 @@ def write_list(tmp_path: Path, rows: str) -> Path:
 
 
 def test_read_list_skips_comments_and_blanks(tmp_path):
-    rows = prewarm.read_list(write_list(tmp_path, "https://a.example/,https://a.example/terms,A\n,,\nhttps://b.example/,,B\n"))
+    rows = prewarm.read_list(write_list(tmp_path, "https://a.example/,https://a.example/terms,A\n,,\n"
+                                                  "# a comment, with, extra commas\nhttps://b.example/,,B\n"))
     assert [(r["page_url"], r["terms_url"], r["name"]) for r in rows] == [
         ("https://a.example/", "https://a.example/terms", "A"), ("https://b.example/", "", "B")]
 

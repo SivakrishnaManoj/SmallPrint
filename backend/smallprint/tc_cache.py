@@ -39,6 +39,7 @@ class TermsCache:
     clock: Callable[[], float] = time.monotonic
     _docs: dict[tuple[str, str, str | None], tuple[float, Fields]] = field(default_factory=dict)
     _sites: dict[str, tuple[float, Fields]] = field(default_factory=dict)
+    _refills: dict[str, tuple[float, dict]] = field(default_factory=dict)
     hits: int = 0
     misses: int = 0
 
@@ -73,9 +74,17 @@ class TermsCache:
         if fields:  # never cache "nothing found" for a whole site
             self._put(self._sites, site, fields)
 
+    # Refill lookups (S8): {"stream": usage stream or None}, keyed on site|brand|name.
+    def get_refill(self, key: str) -> dict | None:
+        return self._get(self._refills, key)
+
+    def put_refill(self, key: str, entry: dict) -> None:
+        self._put(self._refills, key, entry)
+
     def clear(self) -> None:
         self._docs.clear()
         self._sites.clear()
+        self._refills.clear()
         self.hits = self.misses = 0
 
 
