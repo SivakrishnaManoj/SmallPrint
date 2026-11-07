@@ -16,3 +16,7 @@ data/rawData/
 
 # Project instructions are kept local, not shared via git
 CLAUDE.md
+
+# Claude Code: local worktrees and per-user settings
+.claude/worktrees/
+.claude/settings.local.json
