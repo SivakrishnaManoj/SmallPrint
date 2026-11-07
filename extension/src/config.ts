@@ -5,7 +5,7 @@ import sodastream from "~fixtures/requests/req_sodastream.json";
 export type AnalyseBody = Omit<AnalyseRequest, "install_id">;
 
 /** Backend base URL. Override at build time with VITE_SERVER_URL, or at runtime in the panel. */
-export const DEFAULT_SERVER_URL: string = import.meta.env.VITE_SERVER_URL ?? "http://localhost:8000";
+export const DEFAULT_SERVER_URL: string = import.meta.env.VITE_SERVER_URL ?? "https://smallprint-production.up.railway.app";
 
 /** H1: the panel sends a canned request instead of scraping the page. */
 // The fixture still carries a test install_id for the backend's own tests; drop it.

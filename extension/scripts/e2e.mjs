@@ -91,10 +91,13 @@ try {
   check(analyse.length >= 1, `captured ${analyse.length} POST /analyse request(s)`);
   const STANDARD = new Set(["accept", "content-type", "user-agent", "origin", "referer", "sec-ch-ua", "sec-ch-ua-mobile",
     "sec-ch-ua-platform", "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "sec-fetch-storage-access", "accept-encoding",
-    "accept-language", "content-length", "connection", "host"]);
+    "accept-language", "content-length", "connection", "host",
+    // Chrome adds this over HTTP/2 (e.g. the Railway backend).
+    "priority"]);
   for (const r of analyse) {
     const headers = await r.allHeaders();
-    const custom = Object.keys(headers).filter((h) => !STANDARD.has(h));
+    // HTTP/2 pseudo-headers (:authority, :method, :path, :scheme) come from the protocol, not our code.
+    const custom = Object.keys(headers).filter((h) => !h.startsWith(":") && !STANDARD.has(h));
     console.log("  headers sent:", JSON.stringify(headers));
     check(JSON.stringify(custom) === JSON.stringify(["x-install-id"]) && headers["x-install-id"] === stored.install_id,
       `only non-standard header is X-Install-Id = the stored UUID (custom: ${custom.join(", ")})`);
