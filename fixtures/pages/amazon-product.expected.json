@@ -1,0 +1,56 @@
+{
+  "url": "https://www.amazon.co.uk/SodaStream-Terra-Sparkling-Water-Maker/dp/B09ABC1234/ref=sr_1_1?crid=XYZ&keywords=sodastream&sr=8-1",
+  "detection": {
+    "status": "purchase",
+    "detector": "amazon",
+    "checkout": false,
+    "request": {
+      "item": {
+        "name": "SodaStream Terra Sparkling Water Maker, Black",
+        "brand": "SodaStream",
+        "price": 89.99,
+        "seller": "Amazon",
+        "url": "https://www.amazon.co.uk/dp/B09ABC1234",
+        "id": "B09ABC1234"
+      },
+      "purchase_type_signals": [
+        "product"
+      ],
+      "links": [
+        {
+          "url": "https://www.amazon.co.uk/gp/help/customer/display.html?nodeId=201909000",
+          "text": "Conditions of Use & Sale",
+          "kind": "terms"
+        },
+        {
+          "url": "https://www.amazon.co.uk/gp/css/returns/homepage.html",
+          "text": "Returns & Refunds",
+          "kind": "returns"
+        },
+        {
+          "url": "https://www.sodastream.co.uk/pages/warranty",
+          "text": "Manufacturer warranty information",
+          "kind": "warranty"
+        },
+        {
+          "url": "https://www.amazon.co.uk/gp/help/customer/display.html?nodeId=502584",
+          "text": "Privacy Notice",
+          "kind": "privacy"
+        }
+      ],
+      "page_text_snippets": [
+        "SodaStream Terra Sparkling Water Maker, Black",
+        "Make sparkling water at home in seconds, no electricity needed",
+        "Includes one 60L CO2 cylinder; replacement cylinders sold separately and exchanged at participating retailers",
+        "Use only SodaStream-approved Quick Connect CO2 cylinders",
+        "Dishwasher-safe 1L carbonating bottle included",
+        "Manufacturer warranty information",
+        "FREE delivery Tuesday, 12 November"
+      ],
+      "price_drift": {
+        "first_seen": null,
+        "current": 89.99
+      }
+    }
+  }
+}

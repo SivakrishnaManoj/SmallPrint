@@ -1,0 +1,7 @@
+{
+  "url": "https://www.amazon.co.uk/gp/buy/spc/handlers/display.html?hasWorkingJavascript=1",
+  "detection": {
+    "status": "none",
+    "checkout": true
+  }
+}

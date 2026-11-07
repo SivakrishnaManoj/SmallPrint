@@ -103,7 +103,7 @@ function toStreamCard(data: string): StreamCard | null {
 }
 
 /**
- * The body is rebuilt from an allowlist of page-data fields, so nothing about the user
+ * The body is rebuilt from an allowlist of page-data fields (plus fetched T&C documents), so nothing about the user
  * (install_id, postcode, settings) can leak in through a stray property.
  */
 export function buildBody(req: AnalyseBody): AnalyseBody {
@@ -113,6 +113,8 @@ export function buildBody(req: AnalyseBody): AnalyseBody {
     links: req.links,
     page_text_snippets: req.page_text_snippets,
     price_drift: req.price_drift,
+    // Optional T&C documents fetched in the browser (contracts/request.schema.json `terms`).
+    ...(req.terms ? { terms: req.terms } : {}),
   };
 }
 

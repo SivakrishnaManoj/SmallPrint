@@ -140,6 +140,12 @@ describe("what leaves the browser", () => {
     expect(buildHeaders("http://localhost:8000/analyse", UUID)).not.toHaveProperty("ngrok-skip-browser-warning");
   });
 
+  it("buildBody keeps fetched T&C documents", () => {
+    const terms = [{ url: "https://x.example/terms", kind: "terms" as const, text: "Terms" }];
+    expect(buildBody({ ...CANNED_REQUEST, terms }).terms).toEqual(terms);
+    expect(buildBody(CANNED_REQUEST)).not.toHaveProperty("terms");
+  });
+
   it("buildBody drops unknown fields", () => {
     expect(buildBody({ ...CANNED_REQUEST, extra: 1 } as typeof CANNED_REQUEST)).not.toHaveProperty("extra");
   });
