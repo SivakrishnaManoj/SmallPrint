@@ -21,9 +21,10 @@ from typing import AsyncGenerator, Awaitable, Callable
 
 from anthropic import AsyncAnthropic
 
-from smallprint.extract import Document, analyse_documents, html_to_text, pdf_b64_to_text
-from smallprint.search_fallback import MAX_SEARCHES_PER_REQUEST, TavilySearch
+from smallprint.extract import Document, build_cards, extract_fields, html_to_text, pdf_b64_to_text
+from smallprint.search_fallback import MAX_SEARCHES_PER_REQUEST, TavilySearch, site_of
 from smallprint.spend import SpendTracker
+from smallprint.tc_cache import TermsCache
 
 from .models import AnalyseRequest
 
@@ -68,12 +69,20 @@ def _looks_like_html(text: str) -> bool:
     return any(tag in head for tag in ("<html", "<body", "<div", "<p>", "<p ", "<main", "<article"))
 
 
+def page_documents(request: AnalyseRequest) -> list[Document]:
+    """The shopping page's own text, if the extension sent any."""
+    snippets = "\n\n".join(s for s in request.page_text_snippets if s and s.strip())
+    return [Document(request.item.url, snippets)] if snippets else []
+
+
 def build_documents(request: AnalyseRequest) -> list[Document]:
     """Turn the request into the documents the extractor reads. Page text first."""
+    return page_documents(request) + terms_documents(request)
+
+
+def terms_documents(request: AnalyseRequest) -> list[Document]:
+    """T&C pages and PDFs the browser fetched, as text."""
     docs: list[Document] = []
-    snippets = "\n\n".join(s for s in request.page_text_snippets if s and s.strip())
-    if snippets:
-        docs.append(Document(request.item.url, snippets))
     for t in request.terms:
         if t.fetch_failed:
             continue  # found with search instead, see fallback_documents
@@ -109,13 +118,35 @@ async def fallback_documents(request: AnalyseRequest, search: TavilySearch | Non
 
 
 async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncAnthropic,
-                       tracker: SpendTracker, search: TavilySearch | None = None) -> list[Card]:
+                       tracker: SpendTracker, search: TavilySearch | None = None,
+                       cache: TermsCache | None = None) -> list[Card]:
+    site = site_of(request.item.url)
+
     async def run() -> dict | None:
+        page_docs = page_documents(request)
         # Browser-fetched documents first: they win over search results for the same field.
-        docs = build_documents(request) + await fallback_documents(request, search)
-        if not docs:
+        term_docs = terms_documents(request)
+
+        # Repeat visit with no T&C sent: serve the site's cached T&C fields (no fetch, search or LLM).
+        site_fields = cache.get_site(site) if cache and site and not term_docs else None
+        if site_fields is None:
+            term_docs += await fallback_documents(request, search)
+        if not page_docs and not term_docs and site_fields is None:
             return None
-        return await analyse_documents(client, docs, install_id, tracker)
+
+        found_page, limit_page = await extract_fields(client, page_docs, install_id, tracker, cache)
+        if site_fields is not None:
+            found_terms, limit_terms = site_fields, False
+        else:
+            found_terms, limit_terms = await extract_fields(client, term_docs, install_id, tracker, cache)
+            # Only a complete extraction becomes the site's entry (no refusals, no limit cut-off).
+            if cache and site and term_docs and not limit_terms and all(
+                    cache.has_doc(d.url, d.text, d.source) for d in term_docs):
+                cache.put_site(site, found_terms)
+
+        # The shopping page's own text wins over its T&Cs for the same field.
+        merged = {**found_terms, **found_page}
+        return build_cards(merged, limit_page or limit_terms)
 
     # One budget for search + extraction, so the cards always resolve in time.
     result = await asyncio.wait_for(run(), TERMS_TIMEOUT_S)
@@ -144,10 +175,11 @@ def _event(card: Card) -> dict:
 
 
 async def stream_real(request: AnalyseRequest, install_id: str, client: AsyncAnthropic,
-                      tracker: SpendTracker, search: TavilySearch | None = None) -> AsyncGenerator[dict, None]:
+                      tracker: SpendTracker, search: TavilySearch | None = None,
+                      cache: TermsCache | None = None) -> AsyncGenerator[dict, None]:
     sources: list[tuple[tuple[str, ...], Callable[[], Awaitable[list[Card]]]]] = [
         (("item", "price_drift"), lambda: page_source(request)),
-        (TERMS_CARDS, lambda: terms_source(request, install_id, client, tracker, search)),
+        (TERMS_CARDS, lambda: terms_source(request, install_id, client, tracker, search, cache)),
         (("company",), lambda: company_source(request)),
     ]
 

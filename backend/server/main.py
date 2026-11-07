@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import random
+import secrets
 from typing import AsyncGenerator
 
 from anthropic import AsyncAnthropic
@@ -19,6 +20,7 @@ from sse_starlette.sse import EventSourceResponse
 from smallprint import search_fallback
 from smallprint.search_fallback import TavilySearch
 from smallprint.spend import SpendTracker, tracker as default_tracker
+from smallprint.tc_cache import TermsCache, cache as default_cache
 
 from .fixtures import pick_fixture
 from .models import AnalyseRequest
@@ -49,6 +51,22 @@ def get_search() -> TavilySearch | None:
     if _search is None:
         _search = search_fallback.from_env()
     return _search
+
+
+def get_cache() -> TermsCache:
+    return default_cache
+
+
+PREWARM_INSTALL = "prewarm"
+
+
+def is_prewarm(key: str | None) -> bool:
+    """True if the request carries the server's pre-warm key (SMALLPRINT_PREWARM_KEY).
+
+    Without the env var set, pre-warm access is off.
+    """
+    expected = os.environ.get("SMALLPRINT_PREWARM_KEY")
+    return bool(expected and key) and secrets.compare_digest(key.encode(), expected.encode())
 
 app = FastAPI(title="SmallPrint API", version="0.1.0")
 
@@ -148,9 +166,15 @@ async def analyse(
     request: AnalyseRequest,
     http_request: Request,
     x_install_id: str | None = Header(default=None),
+    x_prewarm_key: str | None = Header(default=None),
 ) -> EventSourceResponse:
     # Install UUID comes from the X-Install-Id header; the body field is a fallback.
     install_id = (x_install_id or "").strip() or request.install_id
+    tracker = get_spend_tracker()
+    if is_prewarm(x_prewarm_key):
+        # scripts/prewarm.py: its own install id and a higher daily limit, so ~50 sites fit.
+        install_id = PREWARM_INSTALL
+        tracker.set_limit(PREWARM_INSTALL, float(os.environ.get("SMALLPRINT_PREWARM_LIMIT_USD", "5.00")))
     if not install_id:
         raise HTTPException(status_code=422, detail="Missing X-Install-Id header")
     if not rate_check(install_id):
@@ -158,7 +182,7 @@ async def analyse(
 
     client = get_llm_client()
     if client is not None:
-        return EventSourceResponse(stream_real(request, install_id, client, get_spend_tracker(), get_search()))
+        return EventSourceResponse(stream_real(request, install_id, client, tracker, get_search(), get_cache()))
 
     # Mock mode: no API key configured, serve the fixtures.
     fixture = pick_fixture(request.item.url, request.item.name)
