@@ -1,17 +1,18 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Issues and specs for this repo live as GitHub issues on `j0h4nn1410/smallprint`. Use `gh api` (REST) for all operations. In Claude Code sessions the `gh issue` subcommands fail, because they use GitHub's GraphQL API, which is blocked there. On a normal laptop either form works.
 
 ## Conventions
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
-- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
-- **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
-- **Comment on an issue**: `gh issue comment <number> --body "..."`
-- **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`
+Set `R=repos/j0h4nn1410/smallprint` first.
 
-Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
+- **Create an issue**: `gh api $R/issues -f title="..." -f body="..." -f 'labels[]=ready-for-agent'`. For a long body, write it to a file and pass `-F body=@file.md`.
+- **Read an issue**: `gh api $R/issues/<number>` and `gh api $R/issues/<number>/comments`.
+- **List issues**: `gh api "$R/issues?state=open&labels=<label>&per_page=100" --jq '[.[] | {number, title, labels: [.labels[].name]}]'`. This endpoint also returns pull requests; drop any item that has a `pull_request` key.
+- **Comment on an issue**: `gh api $R/issues/<number>/comments -f body="..."`
+- **Apply a label**: `gh api $R/issues/<number>/labels -f 'labels[]=<label>'`. **Remove one**: `gh api -X DELETE $R/issues/<number>/labels/<label>`.
+- **Close**: `gh api -X PATCH $R/issues/<number> -f state=closed`, after commenting.
+- **Blocking edges**: `gh api $R/issues/<child>/dependencies/blocked_by -F issue_id=<blocker database id>`. Get the database id with `gh api $R/issues/<n> --jq .id`. It is the numeric `id`, not the issue number. If that endpoint is refused, put `Blocked by: #<n>, #<n>` on the first line of the child body.
 
 ## Pull requests as a triage surface
 
