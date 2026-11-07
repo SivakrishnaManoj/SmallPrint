@@ -11,6 +11,7 @@ import { LockInCard } from "./components/LockInCard";
 import { SmallPrintCard } from "./components/SmallPrintCard";
 import { CompanyCard } from "./components/CompanyCard";
 import { FirstRunForm } from "./components/FirstRunForm";
+import { SERVER_URL } from "./config";
 
 // Dev harness: load request fixture files at build time
 const REQ_MODULES = import.meta.glob("../../fixtures/requests/*.json", { eager: true });
@@ -20,7 +21,7 @@ for (const [path, mod] of Object.entries(REQ_MODULES)) {
   FIXTURE_REQUESTS[name] = (mod as { default?: AnalyseRequest }).default ?? (mod as unknown as AnalyseRequest);
 }
 
-const DEFAULT_SERVER = "http://localhost:8000";
+const DEFAULT_SERVER = SERVER_URL;
 
 type CardData = {
   item?: { payload: Partial<AnalyseResult["item"]>; state: CardState };
