@@ -14,6 +14,9 @@ dependencies = [
     "jsonschema>=4.22",
     "pydantic>=2.7",
     "python-dotenv>=1.0",
+    "anthropic>=2.6",
+    "trafilatura>=2.0",
+    "pymupdf>=1.24",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,17 @@
+{
+  "_note": "Recorded/faked Haiku output for retail_returns.html. warranty is paraphrased and must be dropped.",
+  "monthly_price": {"value": null, "quote": null},
+  "trial_months": {"value": null, "quote": null},
+  "trial_price": {"value": null, "quote": null},
+  "setup_fee": {"value": null, "quote": null},
+  "annual_rise_gbp": {"value": null, "quote": null},
+  "price_rise_terms": {"value": null, "quote": null},
+  "min_term_months": {"value": null, "quote": null},
+  "exit_fee": {"value": null, "quote": null},
+  "notice_days": {"value": null, "quote": null},
+  "auto_renews": {"value": null, "quote": null},
+  "cancel_method": {"value": null, "quote": null},
+  "returns_window": {"value": "30 days", "quote": "Most items sold by Example Retail UK Ltd can be returned within 30 days of delivery for a full refund."},
+  "warranty": {"value": "2 years", "quote": "Electrical items have a two-year warranty."},
+  "seller": {"value": "Example Retail UK Ltd", "quote": "Most items sold by Example Retail UK Ltd can be returned within 30 days of delivery for a full refund."}
+}
