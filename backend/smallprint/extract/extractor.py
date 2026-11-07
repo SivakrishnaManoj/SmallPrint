@@ -48,11 +48,6 @@ NUMERIC = {k for k, t in FIELDS.items() if t in ("number", "integer")}
 
 LOCK_IN_FIELDS = ("min_term_months", "exit_fee", "notice_days", "auto_renews", "cancel_method")
 SMALL_PRINT_LABELS = {
-    "min_term_months": "Minimum term",
-    "exit_fee": "Exit fee",
-    "notice_days": "Notice period",
-    "auto_renews": "Auto-renewal",
-    "cancel_method": "How to cancel",
     "price_rise_terms": "Price rises",
     "returns_window": "Returns window",
     "warranty": "Warranty",
@@ -255,10 +250,13 @@ def build_cards(found: dict[str, dict], limit_reached: bool = False) -> dict:
         cost_streams.append({"label": "Annual rise", "type": "step_change", "amount": f["value"],
                              "month": 13, "evidence": _evidence(f)})
 
-    lock_in = {name: found[name]["value"] if name in found else None for name in LOCK_IN_FIELDS}
+    lock_in: dict[str, Any] = {name: found[name]["value"] if name in found else None for name in LOCK_IN_FIELDS}
+    # Contract: one {field, quote, url} entry per non-null lock-in field.
+    lock_in["evidence"] = [
+        {"field": name, "quote": found[name]["quote"], "url": found[name]["url"]}
+        for name in LOCK_IN_FIELDS if name in found
+    ]
 
-    # lock_in in the contract has no quote slot, so each lock-in value also
-    # appears here with its verified quote.
     small_print = [
         {"field": label, "value": _as_text(found[name]["value"]), "quote": found[name]["quote"], "url": found[name]["url"]}
         for name, label in SMALL_PRINT_LABELS.items() if name in found
@@ -275,7 +273,7 @@ def build_cards(found: dict[str, dict], limit_reached: bool = False) -> dict:
         "small_print": small_print,
         "card_states": {
             "cost": state(bool(cost_streams)),
-            "lock_in": state(any(v is not None for v in lock_in.values())),
+            "lock_in": state(bool(lock_in["evidence"])),
             "small_print": state(bool(small_print)),
         },
     }
