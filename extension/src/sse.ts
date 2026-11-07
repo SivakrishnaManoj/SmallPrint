@@ -105,10 +105,6 @@ export async function* streamAnalyse(
   request: AnalyseRequest,
   opts: StreamOptions,
 ): AsyncGenerator<StreamCard, void, undefined> {
-  if ("postcode" in (request as unknown as Record<string, unknown>)) {
-    throw new Error("postcode must not be included in server requests");
-  }
-
   const controller = new AbortController();
   let timeoutReason: string | null = null;
   const timers = new Map<string, ReturnType<typeof setTimeout>>();

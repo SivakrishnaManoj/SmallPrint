@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { saveSettings, savePostcode } from "../storage";
+import { saveSettings } from "../storage";
 import type { Settings } from "../types";
 import { DEFAULT_SETTINGS } from "../types";
 
@@ -8,17 +8,14 @@ interface Props {
 }
 
 const RECORD_KIND_OPTIONS = [
-  { id: "political_donations", label: "Political donations" },
+  { id: "donation", label: "Political donations" },
   { id: "gender_pay_gap", label: "Gender pay gap" },
-  { id: "regulator_decisions", label: "Regulator decisions" },
   { id: "modern_slavery", label: "Modern slavery statements" },
-  { id: "b_corp", label: "B Corp certification" },
 ];
 
 export function FirstRunForm({ onComplete }: Props) {
   const [horizon, setHorizon] = useState<12 | 24>(12);
   const [recordKinds, setRecordKinds] = useState<string[]>(DEFAULT_SETTINGS.recordKinds);
-  const [postcode, setPostcode] = useState("");
 
   function toggleKind(id: string) {
     setRecordKinds((prev) =>
@@ -36,10 +33,6 @@ export function FirstRunForm({ onComplete }: Props) {
     e.preventDefault();
     const settings: Settings = { horizon, recordKinds };
     await saveSettings(settings);
-    // Postcode saved locally; never sent to server
-    if (postcode.trim()) {
-      savePostcode(postcode.trim());
-    }
     onComplete(settings);
   }
 
@@ -71,18 +64,6 @@ export function FirstRunForm({ onComplete }: Props) {
               </label>
             ))}
           </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Home postcode <span class="field-note">(stays on this device, never sent to any server)</span></legend>
-          <input
-            type="text"
-            class="text-input"
-            placeholder="e.g. EH1 1YZ"
-            value={postcode}
-            onInput={(e) => setPostcode((e.target as HTMLInputElement).value)}
-            maxLength={8}
-          />
         </fieldset>
 
         <div class="first-run__actions">

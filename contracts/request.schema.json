@@ -4,7 +4,7 @@
   "title": "AnalyseRequest",
   "description": "Body POSTed by the extension to /analyse",
   "type": "object",
-  "required": ["item", "purchase_type_signals", "links", "page_text_snippets", "price_drift", "install_id"],
+  "required": ["item", "purchase_type_signals", "links", "page_text_snippets", "install_id"],
   "additionalProperties": false,
   "properties": {
     "item": {
@@ -43,15 +43,6 @@
     "page_text_snippets": {
       "type": "array",
       "items": { "type": "string" }
-    },
-    "price_drift": {
-      "type": "object",
-      "required": ["first_seen", "current"],
-      "additionalProperties": false,
-      "properties": {
-        "first_seen": { "type": ["number", "null"] },
-        "current":    { "type": ["number", "null"] }
-      }
     },
     "install_id": { "type": "string", "minLength": 1 }
   }

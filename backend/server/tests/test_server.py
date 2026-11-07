@@ -18,7 +18,6 @@ _BASE_REQUEST = {
     "purchase_type_signals": ["subscription"],
     "links": [],
     "page_text_snippets": [],
-    "price_drift": {"first_seen": None, "current": 4.99},
     "install_id": "test-install-abc123",
 }
 
@@ -81,6 +80,32 @@ async def test_all_card_events_valid_schema(client: AsyncClient) -> None:
                 data = json.loads(line.split(":", 1)[1].strip())
                 errors = list(validator.iter_errors(data))
                 assert not errors, f"Schema errors on card '{data.get('card')}': {errors[0].message}"
+
+
+def test_default_record_kinds_match_data_kinds() -> None:
+    """DEFAULT_SETTINGS.recordKinds must use the same ids as records.kind in the DB.
+
+    The DB uses: donation, gender_pay_gap, modern_slavery.
+    A mismatch means CompanyCard never flags any records for the user.
+    """
+    from pathlib import Path
+    import json
+
+    types_path = Path(__file__).parent.parent.parent.parent / "panel" / "src" / "types.ts"
+    source = types_path.read_text(encoding="utf-8")
+
+    # Extract the recordKinds array from DEFAULT_SETTINGS
+    import re
+    m = re.search(r'recordKinds:\s*\[([^\]]+)\]', source)
+    assert m, "Could not find DEFAULT_SETTINGS.recordKinds in types.ts"
+    kinds = re.findall(r'"([^"]+)"', m.group(1))
+
+    allowed = {"donation", "gender_pay_gap", "modern_slavery"}
+    unknown = set(kinds) - allowed
+    assert not unknown, (
+        f"DEFAULT_SETTINGS.recordKinds contains ids not present in the DB: {unknown}. "
+        f"DB kinds are: {allowed}"
+    )
 
 
 async def test_rate_limit(client: AsyncClient) -> None:

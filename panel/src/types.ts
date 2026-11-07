@@ -104,7 +104,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   horizon: 12,
-  recordKinds: ["political_donations", "gender_pay_gap", "regulator_decisions", "modern_slavery", "b_corp"],
+  recordKinds: ["donation", "gender_pay_gap", "modern_slavery"],
 };
 
 export interface AnalyseRequest {
@@ -119,6 +119,5 @@ export interface AnalyseRequest {
   purchase_type_signals: string[];
   links: { url: string; text: string; kind: string }[];
   page_text_snippets: string[];
-  price_drift: { first_seen: number | null; current: number | null };
   install_id: string;
 }

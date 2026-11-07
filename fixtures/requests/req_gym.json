@@ -26,9 +26,5 @@
     "Cancel anytime with one month's notice",
     "£24.99/month after joining fee"
   ],
-  "price_drift": {
-    "first_seen": null,
-    "current": 24.99
-  },
   "install_id": "test-install-gym-001"
 }

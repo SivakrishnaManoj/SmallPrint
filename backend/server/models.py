@@ -18,17 +18,11 @@ class LinkIn(BaseModel):
     kind: str
 
 
-class PriceDriftIn(BaseModel):
-    first_seen: float | None = None
-    current: float | None = None
-
-
 class AnalyseRequest(BaseModel):
     item: ItemIn
     purchase_type_signals: list[str] = []
     links: list[LinkIn] = []
     page_text_snippets: list[str] = []
-    price_drift: PriceDriftIn = PriceDriftIn()
     install_id: str
 
     @field_validator("install_id")

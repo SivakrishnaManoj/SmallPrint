@@ -12,7 +12,6 @@ const KIND_LABELS: Record<string, string> = {
   gender_pay_gap: "Gender pay gap",
   donation: "Political donation",
   modern_slavery: "Modern slavery statement",
-  regulator_decision: "Regulator decision",
 };
 
 export function CompanyCard({ company, state, flaggedKinds }: Props) {
