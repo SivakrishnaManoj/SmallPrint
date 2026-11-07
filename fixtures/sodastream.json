@@ -1,0 +1,98 @@
+{
+  "purchase_types": ["product"],
+  "item": {
+    "name": "SodaStream Terra Sparkling Water Maker",
+    "brand": "SodaStream",
+    "seller": "Amazon UK",
+    "url": "https://www.amazon.co.uk/dp/B09XXXXXXX",
+    "id": "B09XXXXXXX"
+  },
+  "cost_streams": [
+    {
+      "label": "Machine",
+      "type": "one_off",
+      "amount": 89.99,
+      "evidence": {
+        "quote": "MOCK: SodaStream Terra Sparkling Water Maker — £89.99",
+        "url": "https://www.amazon.co.uk/dp/B09XXXXXXX",
+        "fetched": "2026-11-07",
+        "source_step": "page_price"
+      }
+    },
+    {
+      "label": "CO2 cylinder (60L)",
+      "type": "usage",
+      "unit_price": 14.99,
+      "units_per_month": { "low": 0.5, "mid": 1.0, "high": 2.0 },
+      "evidence": {
+        "quote": "MOCK: Replacement CO2 cylinders, 60L — £14.99 each. Exchange only.",
+        "url": "https://www.sodastream.co.uk/collections/co2-cylinders",
+        "fetched": "2026-11-07",
+        "source_step": "terms_extraction"
+      }
+    }
+  ],
+  "lock_in": {
+    "min_term_months": null,
+    "exit_fee": null,
+    "notice_days": null,
+    "auto_renews": false,
+    "cancel_method": null,
+    "proprietary_refills": true
+  },
+  "small_print": [
+    {
+      "field": "Returns window",
+      "value": "30 days",
+      "quote": "MOCK: Items must be returned within 30 days of delivery in original packaging.",
+      "url": "https://www.amazon.co.uk/returns",
+      "source_step": "terms_extraction"
+    },
+    {
+      "field": "Proprietary cylinders",
+      "value": "SodaStream cylinders only",
+      "quote": "MOCK: Use only SodaStream-approved CO2 cylinders. Use of third-party cylinders voids the warranty.",
+      "url": "https://www.sodastream.co.uk/pages/warranty",
+      "source_step": "terms_extraction"
+    },
+    {
+      "field": "Warranty",
+      "value": "2 years",
+      "quote": "MOCK: SodaStream products are covered by a 2-year limited warranty against manufacturing defects.",
+      "url": "https://www.sodastream.co.uk/pages/warranty",
+      "source_step": "terms_extraction"
+    }
+  ],
+  "company": {
+    "brand": "SodaStream",
+    "parent": "PepsiCo",
+    "ch_number": null,
+    "match_via": "Wikidata (MOCK)",
+    "records": [
+      {
+        "kind": "gender_pay_gap",
+        "summary": "MOCK: PepsiCo UK Ltd reported a mean gender pay gap of 14.2% in favour of men for the 2022/23 reporting year.",
+        "date": "2023-04-05",
+        "source_url": "https://gender-pay-gap.service.gov.uk/employer/mock-pepsico"
+      },
+      {
+        "kind": "modern_slavery",
+        "summary": "MOCK: PepsiCo published a modern slavery and human trafficking statement covering supply chain due diligence measures for FY2023.",
+        "date": "2023-09-01",
+        "source_url": "https://www.pepsico.co.uk/modern-slavery-statement-mock"
+      }
+    ]
+  },
+  "price_drift": {
+    "first_seen": null,
+    "at_checkout": null,
+    "added": []
+  },
+  "card_states": {
+    "cost": "found",
+    "lock_in": "found",
+    "small_print": "found",
+    "company": "found",
+    "price_drift": "n_a"
+  }
+}

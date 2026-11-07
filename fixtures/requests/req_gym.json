@@ -1,0 +1,34 @@
+{
+  "item": {
+    "name": "PureGym Monthly Membership",
+    "brand": "PureGym",
+    "price": 24.99,
+    "seller": "PureGym Limited",
+    "url": "https://www.puregym.com/join/",
+    "id": null
+  },
+  "purchase_type_signals": ["subscription"],
+  "links": [
+    {
+      "url": "https://www.puregym.com/terms-and-conditions/",
+      "text": "Terms and conditions",
+      "kind": "terms"
+    },
+    {
+      "url": "https://www.puregym.com/membership/cancel/",
+      "text": "Cancel membership",
+      "kind": "cancel"
+    }
+  ],
+  "page_text_snippets": [
+    "PureGym Monthly Membership — no contract",
+    "Access to 300+ gyms across the UK",
+    "Cancel anytime with one month's notice",
+    "£24.99/month after joining fee"
+  ],
+  "price_drift": {
+    "first_seen": null,
+    "current": 24.99
+  },
+  "install_id": "test-install-gym-001"
+}

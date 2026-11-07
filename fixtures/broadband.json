@@ -1,0 +1,103 @@
+{
+  "purchase_types": ["contract"],
+  "item": {
+    "name": "BT Full Fibre 100 Broadband",
+    "brand": "BT",
+    "seller": "BT plc",
+    "url": "https://shop.bt.com/broadband/full-fibre/",
+    "id": null
+  },
+  "cost_streams": [
+    {
+      "label": "Monthly broadband fee",
+      "type": "recurring",
+      "amount": 32.99,
+      "from_month": 1,
+      "to_month": 24,
+      "evidence": {
+        "quote": "MOCK: £32.99 per month for 24 months. After your contract ends, prices may change.",
+        "url": "https://shop.bt.com/broadband/full-fibre/",
+        "fetched": "2026-11-07",
+        "source_step": "page_price"
+      }
+    },
+    {
+      "label": "Annual price rise (CPI+3.9%)",
+      "type": "step_change",
+      "amount": 2.50,
+      "month": 13,
+      "evidence": {
+        "quote": "MOCK: Prices will increase each April by CPI plus 3.9%. Based on current CPI estimates this is approximately £2.50 per month from month 13.",
+        "url": "https://www.bt.com/broadband/prices-going-up",
+        "fetched": "2026-11-07",
+        "source_step": "terms_extraction"
+      }
+    }
+  ],
+  "lock_in": {
+    "min_term_months": 24,
+    "exit_fee": "Up to £215",
+    "notice_days": 30,
+    "auto_renews": true,
+    "cancel_method": "Call 0800 783 1401 or use My BT app",
+    "proprietary_refills": null
+  },
+  "small_print": [
+    {
+      "field": "Minimum term",
+      "value": "24 months",
+      "quote": "MOCK: This is a 24-month contract. If you end your contract early you may have to pay an early termination charge.",
+      "url": "https://www.bt.com/broadband/terms",
+      "source_step": "terms_extraction"
+    },
+    {
+      "field": "Early termination charge",
+      "value": "Up to £215",
+      "quote": "MOCK: Early termination charges are calculated as the total monthly fees remaining on your contract, up to a maximum of £215.",
+      "url": "https://www.bt.com/broadband/terms",
+      "source_step": "terms_extraction"
+    },
+    {
+      "field": "Notice period",
+      "value": "30 days",
+      "quote": "MOCK: You must give us at least 30 days' notice to cancel after your minimum term.",
+      "url": "https://www.bt.com/broadband/terms",
+      "source_step": "terms_extraction"
+    }
+  ],
+  "company": {
+    "brand": "BT",
+    "parent": "BT Group plc",
+    "ch_number": "00001800",
+    "match_via": "Companies House exact name (MOCK)",
+    "records": [
+      {
+        "kind": "gender_pay_gap",
+        "summary": "MOCK: BT plc reported a mean gender pay gap of 12.7% in favour of men for the 2022/23 reporting year.",
+        "date": "2023-04-04",
+        "source_url": "https://gender-pay-gap.service.gov.uk/employer/mock-bt"
+      },
+      {
+        "kind": "donation",
+        "summary": "MOCK: BT Group plc donated £50,000 to the Conservative Party in Q3 2023, as recorded in the Electoral Commission register.",
+        "date": "2023-10-01",
+        "source_url": "https://search.electoralcommission.org.uk/mock-bt-donation"
+      }
+    ]
+  },
+  "price_drift": {
+    "first_seen": 29.99,
+    "at_checkout": 32.99,
+    "added": [
+      { "label": "Line rental", "amount": 2.00 },
+      { "label": "Paper billing fee", "amount": 1.00 }
+    ]
+  },
+  "card_states": {
+    "cost": "found",
+    "lock_in": "found",
+    "small_print": "found",
+    "company": "found",
+    "price_drift": "found"
+  }
+}

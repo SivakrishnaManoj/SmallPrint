@@ -1,0 +1,34 @@
+{
+  "item": {
+    "name": "SodaStream Terra Sparkling Water Maker",
+    "brand": "SodaStream",
+    "price": 89.99,
+    "seller": "Amazon UK",
+    "url": "https://www.amazon.co.uk/dp/B09XXXXXXX",
+    "id": "B09XXXXXXX"
+  },
+  "purchase_type_signals": ["product"],
+  "links": [
+    {
+      "url": "https://www.amazon.co.uk/returns",
+      "text": "Return this item",
+      "kind": "returns"
+    },
+    {
+      "url": "https://www.sodastream.co.uk/pages/warranty",
+      "text": "Warranty information",
+      "kind": "warranty"
+    }
+  ],
+  "page_text_snippets": [
+    "SodaStream Terra Sparkling Water Maker",
+    "Make sparkling water at home",
+    "Compatible with 60L CO2 cylinders — exchange at participating retailers",
+    "Use only SodaStream-approved CO2 cylinders"
+  ],
+  "price_drift": {
+    "first_seen": null,
+    "current": 89.99
+  },
+  "install_id": "test-install-sodastream-001"
+}

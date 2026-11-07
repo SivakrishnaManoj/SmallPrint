@@ -1,0 +1,39 @@
+{
+  "purchase_types": ["subscription"],
+  "item": {
+    "name": "Unknown Subscription Service",
+    "brand": null,
+    "seller": null,
+    "url": "https://example-subscription.com/signup",
+    "id": null
+  },
+  "cost_streams": [],
+  "lock_in": {
+    "min_term_months": null,
+    "exit_fee": null,
+    "notice_days": null,
+    "auto_renews": null,
+    "cancel_method": null,
+    "proprietary_refills": null
+  },
+  "small_print": [],
+  "company": {
+    "brand": null,
+    "parent": null,
+    "ch_number": null,
+    "match_via": null,
+    "records": []
+  },
+  "price_drift": {
+    "first_seen": null,
+    "at_checkout": null,
+    "added": []
+  },
+  "card_states": {
+    "cost": "not_found",
+    "lock_in": "not_found",
+    "small_print": "not_found",
+    "company": "not_found",
+    "price_drift": "not_found"
+  }
+}

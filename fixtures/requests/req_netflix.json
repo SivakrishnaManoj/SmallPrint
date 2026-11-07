@@ -1,0 +1,34 @@
+{
+  "item": {
+    "name": "Netflix Standard with ads",
+    "brand": "Netflix",
+    "price": 4.99,
+    "seller": "Netflix, Inc.",
+    "url": "https://www.netflix.com/gb/signup",
+    "id": null
+  },
+  "purchase_type_signals": ["subscription"],
+  "links": [
+    {
+      "url": "https://help.netflix.com/legal/termsofuse",
+      "text": "Terms of Use",
+      "kind": "terms"
+    },
+    {
+      "url": "https://help.netflix.com/en/node/mock-cancel",
+      "text": "How to cancel",
+      "kind": "cancel"
+    }
+  ],
+  "page_text_snippets": [
+    "Netflix Standard with ads — £4.99/month",
+    "Cancel anytime",
+    "Stream on 2 devices simultaneously",
+    "Membership renews monthly"
+  ],
+  "price_drift": {
+    "first_seen": null,
+    "current": 4.99
+  },
+  "install_id": "test-install-netflix-001"
+}
