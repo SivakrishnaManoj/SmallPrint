@@ -23,4 +23,6 @@ def mock_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     Real-pipeline tests opt in by patching main.get_llm_client with a faked client.
     """
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.setattr(main, "_llm_client", None)
+    monkeypatch.setattr(main, "_search", None)

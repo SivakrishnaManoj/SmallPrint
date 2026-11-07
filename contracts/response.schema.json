@@ -89,7 +89,8 @@
                 "enum": ["min_term_months", "exit_fee", "notice_days", "auto_renews", "cancel_method", "proprietary_refills"]
               },
               "quote": { "type": "string", "minLength": 1 },
-              "url":   { "type": "string", "minLength": 1 }
+              "url":   { "type": "string", "minLength": 1 },
+              "source_step": { "type": ["string", "null"], "description": "Set when the quote came from a fallback source, e.g. tavily_search." }
             }
           }
         }

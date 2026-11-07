@@ -214,7 +214,7 @@ async def test_failed_fetches_are_skipped(monkeypatch, tracker):
     fake = use_llm(monkeypatch, FakeLLM())
     body = {**REQUEST, "terms": [{"url": "https://blocked.example/terms", "fetch_failed": True, "error": "HTTP 403"}]}
     by_card = cards(await stream(body))
-    assert fake.calls == 0  # Tavily fallback is S6
+    assert fake.calls == 0  # no Tavily key in tests, so no fallback; see test_fallback_pipeline.py
     assert by_card["lock_in"]["state"] == "not_found"
 
 

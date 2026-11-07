@@ -16,6 +16,8 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
+from smallprint import search_fallback
+from smallprint.search_fallback import TavilySearch
 from smallprint.spend import SpendTracker, tracker as default_tracker
 
 from .fixtures import pick_fixture
@@ -36,6 +38,17 @@ def get_llm_client() -> AsyncAnthropic | None:
 
 def get_spend_tracker() -> SpendTracker:
     return default_tracker
+
+
+_search: TavilySearch | None = None
+
+
+def get_search() -> TavilySearch | None:
+    """Tavily search for failed T&C fetches, or None without TAVILY_API_KEY (no fallback)."""
+    global _search
+    if _search is None:
+        _search = search_fallback.from_env()
+    return _search
 
 app = FastAPI(title="SmallPrint API", version="0.1.0")
 
@@ -145,7 +158,7 @@ async def analyse(
 
     client = get_llm_client()
     if client is not None:
-        return EventSourceResponse(stream_real(request, install_id, client, get_spend_tracker()))
+        return EventSourceResponse(stream_real(request, install_id, client, get_spend_tracker(), get_search()))
 
     # Mock mode: no API key configured, serve the fixtures.
     fixture = pick_fixture(request.item.url, request.item.name)

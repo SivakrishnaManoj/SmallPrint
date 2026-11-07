@@ -3,7 +3,9 @@
 Sources, started together:
   * page   -> item and price_drift cards, straight from the request (well under 2 s)
   * terms  -> cost, lock_in and small_print cards, from the extractor (S3) under the
-              per-install spend limit (S4), with a hard timeout so no spinner hangs
+              per-install spend limit (S4), with a hard timeout so no spinner hangs.
+              T&C pages the browser couldn't fetch are found with Tavily (S6) and
+              every value from them is labelled source_step="tavily_search".
   * company -> company card. Until the company matcher (J5, #17) lands this is
               not_found: showing the mock company for a real page would be a wrong value.
 
@@ -20,6 +22,7 @@ from typing import AsyncGenerator, Awaitable, Callable
 from anthropic import AsyncAnthropic
 
 from smallprint.extract import Document, analyse_documents, html_to_text, pdf_b64_to_text
+from smallprint.search_fallback import MAX_SEARCHES_PER_REQUEST, TavilySearch
 from smallprint.spend import SpendTracker
 
 from .models import AnalyseRequest
@@ -73,7 +76,7 @@ def build_documents(request: AnalyseRequest) -> list[Document]:
         docs.append(Document(request.item.url, snippets))
     for t in request.terms:
         if t.fetch_failed:
-            continue  # Tavily fallback is S6 (#15)
+            continue  # found with search instead, see fallback_documents
         try:
             if t.text:
                 text = html_to_text(t.text) if _looks_like_html(t.text) else t.text
@@ -89,12 +92,35 @@ def build_documents(request: AnalyseRequest) -> list[Document]:
     return docs
 
 
+async def fallback_documents(request: AnalyseRequest, search: TavilySearch | None) -> list[Document]:
+    """Search for each T&C document the browser failed to fetch (at most 2 searches)."""
+    failed = [t for t in request.terms if t.fetch_failed][:MAX_SEARCHES_PER_REQUEST]
+    if not failed or search is None:
+        return []
+    name = request.item.brand or request.item.name
+    found = await asyncio.gather(*(search.find_terms(t.url, name, t.kind) for t in failed))
+    seen: set[str] = set()
+    docs: list[Document] = []
+    for d in (d for batch in found for d in batch):
+        if d.url not in seen:
+            seen.add(d.url)
+            docs.append(d)
+    return docs
+
+
 async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncAnthropic,
-                       tracker: SpendTracker) -> list[Card]:
-    docs = build_documents(request)
-    if not docs:
+                       tracker: SpendTracker, search: TavilySearch | None = None) -> list[Card]:
+    async def run() -> dict | None:
+        # Browser-fetched documents first: they win over search results for the same field.
+        docs = build_documents(request) + await fallback_documents(request, search)
+        if not docs:
+            return None
+        return await analyse_documents(client, docs, install_id, tracker)
+
+    # One budget for search + extraction, so the cards always resolve in time.
+    result = await asyncio.wait_for(run(), TERMS_TIMEOUT_S)
+    if result is None:
         return _not_found(TERMS_CARDS)
-    result = await asyncio.wait_for(analyse_documents(client, docs, install_id, tracker), TERMS_TIMEOUT_S)
     states = result["card_states"]
     return [
         ("cost", states["cost"], {"cost_streams": result["cost_streams"]}),
@@ -118,10 +144,10 @@ def _event(card: Card) -> dict:
 
 
 async def stream_real(request: AnalyseRequest, install_id: str, client: AsyncAnthropic,
-                      tracker: SpendTracker) -> AsyncGenerator[dict, None]:
+                      tracker: SpendTracker, search: TavilySearch | None = None) -> AsyncGenerator[dict, None]:
     sources: list[tuple[tuple[str, ...], Callable[[], Awaitable[list[Card]]]]] = [
         (("item", "price_drift"), lambda: page_source(request)),
-        (TERMS_CARDS, lambda: terms_source(request, install_id, client, tracker)),
+        (TERMS_CARDS, lambda: terms_source(request, install_id, client, tracker, search)),
         (("company",), lambda: company_source(request)),
     ]
 
