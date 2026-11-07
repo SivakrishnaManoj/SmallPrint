@@ -18,6 +18,7 @@ from typing import Any
 
 from anthropic import AsyncAnthropic
 
+from smallprint.spend import MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS, SpendLimitReached, SpendTracker
 from smallprint.verify import verify_field
 
 from .text import CHUNK_TOKENS, chunk_text, estimate_tokens
@@ -25,8 +26,6 @@ from .text import CHUNK_TOKENS, chunk_text, estimate_tokens
 log = logging.getLogger(__name__)
 
 MODEL = "claude-haiku-5-5"
-MAX_INPUT_TOKENS = 8_000  # hard cap per call (CLAUDE.md)
-MAX_OUTPUT_TOKENS = 4_000
 
 # field -> JSON type of its value
 FIELDS: dict[str, str] = {
@@ -150,16 +149,29 @@ def verify_extraction(raw: dict[str, Any], source: str) -> dict[str, dict]:
 # LLM call
 # ---------------------------------------------------------------------------
 
-async def _extract_chunk(client: AsyncAnthropic, chunk: str) -> dict[str, Any]:
-    if _SYSTEM_TOKENS + estimate_tokens(chunk) > MAX_INPUT_TOKENS:
+async def _extract_chunk(client: AsyncAnthropic, chunk: str, install_id: str | None,
+                         tracker: SpendTracker | None) -> dict[str, Any]:
+    input_tokens = _SYSTEM_TOKENS + estimate_tokens(chunk)
+    if input_tokens > MAX_INPUT_TOKENS:
         raise ValueError("chunk exceeds the 8k input cap")
-    response = await client.messages.create(
-        model=MODEL,
-        max_tokens=MAX_OUTPUT_TOKENS,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": f"<document>\n{chunk}\n</document>"}],
-        output_config={"effort": "low", "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
-    )
+
+    async def call():
+        return await client.messages.create(
+            model=MODEL,
+            max_tokens=MAX_OUTPUT_TOKENS,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": f"<document>\n{chunk}\n</document>"}],
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
+        )
+
+    if tracker is None:
+        response = await call()
+    else:
+        # Raises SpendLimitReached before the call if today's limit is used up.
+        async with tracker.guard(install_id or "", input_tokens, MAX_OUTPUT_TOKENS) as usage:
+            response = await call()
+            usage.input_tokens = response.usage.input_tokens
+            usage.output_tokens = response.usage.output_tokens
     if response.stop_reason != "end_turn":
         # refusal, max_tokens, ...: treat the chunk as giving nothing.
         log.warning("extractor stop_reason=%s; chunk skipped", response.stop_reason)
@@ -181,20 +193,27 @@ class Document:
     text: str
 
 
-async def extract_fields(client: AsyncAnthropic, docs: list[Document]) -> dict[str, dict]:
+async def extract_fields(client: AsyncAnthropic, docs: list[Document], install_id: str | None = None,
+                         tracker: SpendTracker | None = None) -> tuple[dict[str, dict], bool]:
     """Verified fields across all documents. First verified value per field wins.
 
-    Returns {field: {"value", "quote", "url"}}.
+    With a ``tracker``, every call is charged to ``install_id``; once the daily
+    limit is reached no further calls are made.
+
+    Returns ({field: {"value", "quote", "url"}}, limit_reached).
     """
     found: dict[str, dict] = {}
     for doc in docs:
         # Chunk size leaves room for the system prompt and schema inside the 8k cap.
         chunk_tokens = min(CHUNK_TOKENS, MAX_INPUT_TOKENS - _SYSTEM_TOKENS)
         for chunk in chunk_text(doc.text, chunk_tokens):
-            raw = await _extract_chunk(client, chunk)
+            try:
+                raw = await _extract_chunk(client, chunk, install_id, tracker)
+            except SpendLimitReached:
+                return found, True
             for name, item in verify_extraction(raw, chunk).items():
                 found.setdefault(name, {**item, "url": doc.url})
-    return found
+    return found, False
 
 
 # ---------------------------------------------------------------------------
@@ -205,8 +224,13 @@ def _evidence(f: dict) -> dict:
     return {"quote": f["quote"], "url": f["url"]}
 
 
-def build_cards(found: dict[str, dict]) -> dict:
-    """Map verified fields onto the response contract slices + card states."""
+def build_cards(found: dict[str, dict], limit_reached: bool = False) -> dict:
+    """Map verified fields onto the response contract slices + card states.
+
+    If the spend limit cut extraction short, a card with nothing verified shows
+    ``limit_reached`` instead of ``not_found``: we didn't look, rather than
+    looked and found nothing. Verified values found before the limit still show.
+    """
     cost_streams: list[dict] = []
     trial_months = found.get("trial_months", {}).get("value")
     trial = found.get("trial_price")
@@ -239,7 +263,9 @@ def build_cards(found: dict[str, dict]) -> dict:
     ]
 
     def state(present: bool) -> str:
-        return "found" if present else "not_found"
+        if present:
+            return "found"
+        return "limit_reached" if limit_reached else "not_found"
 
     return {
         "cost_streams": cost_streams,
@@ -259,5 +285,7 @@ def _as_text(value: Any) -> str:
     return str(value)
 
 
-async def analyse_documents(client: AsyncAnthropic, docs: list[Document]) -> dict:
-    return build_cards(await extract_fields(client, docs))
+async def analyse_documents(client: AsyncAnthropic, docs: list[Document], install_id: str | None = None,
+                            tracker: SpendTracker | None = None) -> dict:
+    found, limit_reached = await extract_fields(client, docs, install_id, tracker)
+    return build_cards(found, limit_reached)
