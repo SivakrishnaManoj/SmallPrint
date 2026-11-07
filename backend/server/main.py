@@ -9,7 +9,7 @@ import json
 import random
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
@@ -107,8 +107,16 @@ async def health() -> dict:
 
 
 @app.post("/analyse")
-async def analyse(request: AnalyseRequest, http_request: Request) -> EventSourceResponse:
-    if not rate_check(request.install_id):
+async def analyse(
+    request: AnalyseRequest,
+    http_request: Request,
+    x_install_id: str | None = Header(default=None),
+) -> EventSourceResponse:
+    # Install UUID comes from the X-Install-Id header; the body field is a fallback.
+    install_id = (x_install_id or "").strip() or request.install_id
+    if not install_id:
+        raise HTTPException(status_code=422, detail="Missing X-Install-Id header")
+    if not rate_check(install_id):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     fixture = pick_fixture(request.item.url, request.item.name)
