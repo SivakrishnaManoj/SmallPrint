@@ -67,6 +67,15 @@ def _all_found_values_have_verified_quotes(cards: dict, sources: dict[str, str])
     for row in cards["small_print"]:
         assert row["url"] in sources, row
         assert verify_quote(row["quote"], sources[row["url"]]), row
+    lock_in = cards["lock_in"]
+    evidenced = set()
+    for ev in lock_in["evidence"]:
+        assert ev["url"] in sources, ev
+        assert verify_quote(ev["quote"], sources[ev["url"]]), ev
+        evidenced.add(ev["field"])
+    # Contract rule: every non-null lock-in field has an evidence entry.
+    non_null = {k for k, v in lock_in.items() if k != "evidence" and v is not None}
+    assert non_null == evidenced
 
 
 def _validate_against_contract(cards: dict) -> None:
@@ -101,7 +110,9 @@ async def test_gym_terms_every_found_value_is_verified():
     assert cards["lock_in"]["cancel_method"] == "online in the app"
     # notice_days quote was a paraphrase: dropped.
     assert cards["lock_in"]["notice_days"] is None
-    assert "Notice period" not in {r["field"] for r in cards["small_print"]}
+    assert "notice_days" not in {e["field"] for e in cards["lock_in"]["evidence"]}
+    # Lock-in quotes live in lock_in.evidence, not duplicated in small_print.
+    assert {r["field"] for r in cards["small_print"]} == {"Seller"}
 
 
 async def test_retail_html_page_via_trafilatura():
