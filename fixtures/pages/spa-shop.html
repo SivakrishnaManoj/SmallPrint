@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <title>Kettle One | Hollin Home</title>
+  <meta property="og:site_name" content="Hollin Home">
+  <script type="application/ld+json" id="product-ld"></script>
+</head>
+<body>
+<header><nav><a href="/">Hollin Home</a> <a href="/basket">Basket</a></nav></header>
+<main id="app"></main>
+<footer><a href="/help/terms">Terms &amp; conditions</a> <a href="/help/returns">Returns</a></footer>
+<script>
+  // A single-page shop: changing product rewrites the page and the URL, without a page load.
+  const PRODUCTS = {
+    "kettle-one": { name: "Hollin Kettle One, 1.7 L", brand: "Hollin", price: "39.99", sku: "HK-001" },
+    "toaster-two": { name: "Hollin Toaster Two, 2-slice", brand: "Hollin", price: "54.00", sku: "HT-002" },
+  };
+  function render(id) {
+    const p = PRODUCTS[id];
+    document.title = `${p.name} | Hollin Home`;
+    document.getElementById("product-ld").textContent = JSON.stringify({
+      "@context": "https://schema.org", "@type": "Product", name: p.name, sku: p.sku,
+      brand: { "@type": "Brand", name: p.brand },
+      offers: { "@type": "Offer", price: p.price, priceCurrency: "GBP", seller: { "@type": "Organization", name: "Hollin Home" } },
+    });
+    document.getElementById("app").innerHTML =
+      `<h1>${p.name}</h1><p class="price">£${p.price}</p><p>2 year guarantee. Free returns within 30 days.</p>` +
+      `<a id="next" href="/p/${id === "kettle-one" ? "toaster-two" : "kettle-one"}">Next product</a>`;
+    document.getElementById("next").addEventListener("click", (e) => {
+      e.preventDefault();
+      const next = new URL(e.currentTarget.href).pathname.split("/").pop();
+      history.pushState({}, "", `/p/${next}`);
+      render(next);
+    });
+  }
+  render(location.pathname.split("/").pop() in PRODUCTS ? location.pathname.split("/").pop() : "kettle-one");
+</script>
+</body>
+</html>
