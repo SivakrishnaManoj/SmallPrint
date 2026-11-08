@@ -227,9 +227,11 @@ def get_company_lookup():
 async def company_source(request: AnalyseRequest) -> list[Card]:
     brand = request.item.brand or request.item.name or ""
     domain = request.item.url or ""
-    result = await get_company_lookup()(brand, domain, manufacturer=request.item.manufacturer)
-    # "found" when we know who's behind it, even if no UK records could be joined.
-    state = "found" if result.get("ch_number") or result.get("parent") else "not_found"
+    result = await get_company_lookup()(brand, domain)
+    # Found when we have a Companies House match, or at least one record matched by
+    # exact brand/parent name (the ethics datasets carry no CH number). ADR 0002.
+    found = bool(result.get("ch_number") or result.get("records"))
+    state = "found" if found else "not_found"
     return [("company", state, result)]
 
 
