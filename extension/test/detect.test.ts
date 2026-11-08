@@ -99,6 +99,25 @@ describe("what each detector finds", () => {
     // Checkout without product details still lights the badge.
     expect(run("amazon-checkout")).toEqual({ status: "none", checkout: true });
   });
+
+  // 40-URL run 2026-11-08: audible.co.uk keeps its offer in a hero banner outside a near-empty <main>.
+  it("wording: a near-empty <main> (app shell) falls back to the whole body", () => {
+    const d = detectPurchase("https://www.audible.co.uk/ep/whats-audible", html(
+      `<section class="hero"><p>This Season's Biggest Deal | £0.99/mo for 3 months</p><p>£5.99/mo after 3 months - terms apply. Cancel monthly</p></section>
+       <main><p>Try it now</p></main>`,
+      "<title>Audible</title>",
+    ));
+    expect(d).toMatchObject({ status: "purchase", detector: "wording" });
+    if (d.status === "purchase") expect(d.request.item.price).toBe(0.99);
+  });
+
+  it("wording: a full <main> is still the only root, so a news page's support banner outside it is not a purchase", () => {
+    const article = Array.from({ length: 20 }, (_, i) => `<p>Paragraph ${i} of a news story about the economy.</p>`).join("");
+    const d = detectPurchase("https://www.example-news.co.uk/uk-news", html(
+      `<main>${article}</main><section class="support-banner"><p>Support us from £4/month. Cancel anytime.</p></section>`,
+    ));
+    expect(d.status).toBe("none");
+  });
 });
 
 describe("detector order and purity", () => {

@@ -1,0 +1,56 @@
+page_url,terms_url,name
+# Pre-warm list for the demo (~50 UK sites). Run after the LAST deploy: the cache is in memory.
+# terms_url blank = the server finds the site's own T&Cs with a same-site search.
+# --- Subscriptions and contracts from demo/urls40.txt ---
+https://www.netflix.com/gb/signup,https://help.netflix.com/legal/termsofuse,Netflix
+https://www.spotify.com/gb/premium/,https://www.spotify.com/uk/legal/end-user-agreement/,Spotify Premium
+https://www.disneyplus.com/en-gb/sign-up,,Disney+
+https://www.puregym.com/join/,,PureGym
+https://www.thegymgroup.com/join/,,The Gym Group
+https://www.hellofresh.co.uk/plans,,HelloFresh
+https://www.audible.co.uk/ep/whats-audible,,Audible
+https://www.microsoft.com/en-gb/microsoft-365/personal,,Microsoft 365
+https://www.bt.com/broadband/full-fibre/,,BT Broadband
+https://www.sky.com/shop/broadband,,Sky Broadband
+# --- Other UK subscriptions and contracts ---
+https://www.vodafone.co.uk/mobile/best-sim-only-deals,,Vodafone SIM only
+https://www.ee.co.uk/mobile/sim-only,,EE SIM only
+https://www.o2.co.uk/shop/sim-cards/sim-only-deals,,O2 SIM only
+https://www.three.co.uk/shop/sim-only,,Three SIM only
+https://www.giffgaff.com/sim-only-plans,,giffgaff
+https://www.virginmedia.com/broadband,,Virgin Media Broadband
+https://www.plus.net/broadband/,,Plusnet Broadband
+https://www.talktalk.co.uk/shop/broadband,,TalkTalk Broadband
+https://www.nowtv.com/gb/entertainment,,NOW
+https://www.primevideo.com/,,Prime Video
+https://www.amazon.co.uk/amazonprime,,Amazon Prime
+https://www.youtube.com/premium,,YouTube Premium
+https://www.apple.com/uk/apple-one/,,Apple One
+https://www.britbox.co.uk/,,BritBox
+https://www.dazn.com/en-GB/welcome,,DAZN
+https://www.davidlloyd.co.uk/memberships/,,David Lloyd
+https://www.nuffieldhealth.com/gyms/memberships,,Nuffield Health gyms
+https://www.gousto.co.uk/,,Gousto
+https://www.mindfulchef.com/,,Mindful Chef
+https://www.graze.com/uk,,Graze
+https://www.economist.com/subscribe,,The Economist
+https://www.thetimes.com/subscribe,,The Times
+https://www.ft.com/products,,Financial Times
+https://www.octopus.energy/tariffs/,,Octopus Energy
+https://www.britishgas.co.uk/energy/gas-and-electricity.html,,British Gas
+https://www.sodastream.co.uk/,,SodaStream
+https://www.tesco.com/clubcard/clubcard-plus/,,Tesco Clubcard Plus
+https://www.ocado.com/smartpass,,Ocado Smart Pass
+https://www.deliveroo.co.uk/plus,,Deliveroo Plus
+https://www.ring.com/uk/en/ring-protect-plans,,Ring Protect
+# --- JSON-LD retailers from demo/urls40.txt (returns, warranty, seller) ---
+https://www.argos.co.uk/product/9215346,,Argos
+https://www.johnlewis.com/,,John Lewis
+https://www.currys.co.uk/,,Currys
+https://www.screwfix.com/,,Screwfix
+https://www.ikea.com/gb/en/,,IKEA
+https://www.boots.com/,,Boots
+https://ao.com/,,AO
+https://www.next.co.uk/,,Next
+https://www.wayfair.co.uk/,,Wayfair
+https://www.prettylittlething.com/,,PrettyLittleThing
