@@ -60,7 +60,6 @@ export function App() {
   // null = still loading. false = first run not done yet → show the form instead of the cards.
   const [setupDone, setSetupDone] = useState<boolean | null>(null);
   const [editingSettings, setEditingSettings] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [cards, setCards] = useState<StreamCard[]>([]);
   // Starts "done": nothing is loading until there's a purchase to analyse, so a page with
   // no purchase never flashes the spinner (W7).
@@ -150,7 +149,7 @@ export function App() {
     const input = (e.currentTarget as HTMLFormElement).elements.namedItem("server") as HTMLInputElement;
     const next = input.value.trim() || DEFAULT_SERVER_URL;
     saveServerUrl(next);
-    setShowSettings(false);
+    setEditingSettings(false);
     if (next === serverUrl) rerun();
     else setServerUrl(next);
   }
@@ -177,6 +176,13 @@ export function App() {
           title={setupDone ? "Settings" : "Set up SmallPrint"}
           onComplete={onSettingsDone}
         />
+        {setupDone && (
+          <form class="sp-settings" onSubmit={onSubmitServer} data-testid="server-form">
+            <label for="server">Server (for testing)</label>
+            <input id="server" name="server" class="text-input" type="url" defaultValue={serverUrl ?? ""} placeholder={DEFAULT_SERVER_URL} />
+            <button class="btn btn--ghost" type="submit">Save server</button>
+          </form>
+        )}
       </div>
     );
   }
@@ -192,20 +198,11 @@ export function App() {
         <h1 class="sp-title">SmallPrint</h1>
         <div class="sp-actions">
           <button class="btn btn--ghost" onClick={() => setEditingSettings(true)}>Settings</button>
-          <button class="btn btn--ghost" onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings}>Server</button>
           <button class="btn btn--primary" onClick={rerun} disabled={status === "streaming" || !serverUrl || !request}>
             Re-run
           </button>
         </div>
       </header>
-
-      {showSettings && (
-        <form class="sp-settings" onSubmit={onSubmitServer}>
-          <label for="server">Server</label>
-          <input id="server" name="server" class="text-input" type="url" defaultValue={serverUrl ?? ""} placeholder={DEFAULT_SERVER_URL} />
-          <button class="btn btn--primary" type="submit">Save</button>
-        </form>
-      )}
 
       {status === "error" && (
         <div class="error-banner sp-error" role="alert">
@@ -222,18 +219,31 @@ export function App() {
         ))}
       </div>
 
-      {/* The law, not the seller's terms: shown apart from the evidence cards, once there's a purchase. */}
-      {!noPurchase && visible.length > 0 && <StatutoryRights purchaseTypes={purchaseTypes} />}
+      {/* Progress sits right under the last card, followed by quiet placeholders for the cards still
+          to come, so the page doesn't jump as each one arrives. */}
       {status === "streaming" && request && (
-        <div class="sp-progress" data-testid="progress">
-          <span class="spinner" aria-hidden="true" />
-          <span>
-            {phase === "terms"
-              ? "Reading the terms…"
-              : cards.length === 0 ? "Checking the small print…" : `Checking… ${cards.length} of ${TOTAL_CARDS}`}
-          </span>
-        </div>
+        <>
+          <div class="sp-progress" data-testid="progress">
+            <span class="spinner" aria-hidden="true" />
+            <span>
+              {phase === "terms"
+                ? "Reading the terms…"
+                : cards.length === 0 ? "Checking the small print…" : `Checking… ${cards.length} of ${TOTAL_CARDS}`}
+            </span>
+          </div>
+          <div aria-hidden="true">
+            {Array.from({ length: Math.max(0, TOTAL_CARDS - cards.length) }, (_, i) => (
+              <div key={i} class="sp-placeholder" data-testid="placeholder">
+                <span class="sp-placeholder__line sp-placeholder__line--short" />
+                <span class="sp-placeholder__line" />
+              </div>
+            ))}
+          </div>
+        </>
       )}
+
+      {/* The law, not the seller's terms: shown apart from the evidence cards, once all the cards are in. */}
+      {status !== "streaming" && !noPurchase && visible.length > 0 && <StatutoryRights purchaseTypes={purchaseTypes} />}
 
       {noPurchasePage && (
         <div class="cards" data-testid="no-purchase">

@@ -130,7 +130,22 @@ try {
   while (Date.now() - t0 < 15000) {
     const n = await page.locator(".cards > *").count();
     if (n > seen.length) seen.push({ n, ms: Date.now() - t0 });
-    if (shots && n === 2 && !seen.shot) { seen.shot = true; await page.screenshot({ path: join(shots, "streaming.png") }); }
+    if (n === 2 && !seen.mid) {
+      // UI polish: mid-stream layout. Captured once, while cards are still arriving.
+      seen.mid = await page.evaluate(() => {
+        const progress = document.querySelector('[data-testid="progress"]');
+        const lastCard = [...document.querySelectorAll(".cards > .card")].at(-1);
+        return {
+          statutory: !!document.querySelector('[data-testid="statutory-rights"]'),
+          placeholders: document.querySelectorAll('[data-testid="placeholder"]').length,
+          // Layout positions (offsetTop), not getBoundingClientRect: the newest card may still be mid-entrance (translateY).
+          gap: progress && lastCard ? progress.offsetTop - (lastCard.offsetTop + lastCard.offsetHeight) : null,
+          progressUnderLastCard: !!progress && !!lastCard &&
+            Math.abs(progress.offsetTop - (lastCard.offsetTop + lastCard.offsetHeight)) < 4,
+        };
+      });
+      if (shots) await page.screenshot({ path: join(shots, "streaming.png") });
+    }
     if ((await page.getByTestId("progress").count()) === 0) break;
     await page.waitForTimeout(50);
   }
@@ -138,6 +153,16 @@ try {
   const titles = await page.locator(".card__title").allTextContents();
   console.log("  arrivals:", seen.map((s) => `${s.n}@${s.ms}ms`).join(" "), "| titles:", titles.join(", "));
   check(final === 6, `six cards rendered (got ${final})`);
+  if (seen.mid) {
+    check(!seen.mid.statutory, "while streaming: statutory rights wait until all cards are in");
+    check(seen.mid.placeholders === 4 && seen.mid.progressUnderLastCard,
+      `while streaming: progress right under the last card (gap ${seen.mid.gap}px), then ${seen.mid.placeholders} placeholders for the cards to come`);
+  }
+  check((await page.getByTestId("statutory-rights").count()) === 1 && (await page.getByTestId("placeholder").count()) === 0,
+    "after streaming: statutory rights shown, placeholders gone");
+  check((await page.locator("header").getByRole("button", { name: "Server" }).count()) === 0, "header: no developer 'Server' button");
+  const press = await page.getByRole("button", { name: "Re-run" }).evaluate((b) => getComputedStyle(b).transitionProperty);
+  check(/scale/.test(press) && !/\ball\b/.test(press), `buttons: press feedback transitions named properties (${press})`);
   check(seen.length >= 4, `cards arrived incrementally (${seen.length} distinct steps)`);
   check((await page.getByTestId("progress").count()) === 0, "spinner gone after done");
   check((await page.getByRole("alert").count()) === 0, "no error banner");
@@ -191,6 +216,7 @@ try {
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByTestId("settings-form").waitFor();
   check(await page.getByText("Settings", { exact: true }).count() > 0, "Settings link reopens the form");
+  check(await page.getByTestId("server-form").isVisible(), "server URL setting now lives in Settings");
   await page.getByRole("button", { name: "24 months" }).click();
   await page.getByText("Save and start").click();
   await page.locator(".card__title").first().waitFor();
