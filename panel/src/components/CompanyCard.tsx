@@ -47,7 +47,21 @@ function recSub(r: CompanyRecord): string {
 export function CompanyCard({ company, state, flaggedKinds }: Props) {
   const [showAll, setShowAll] = useState(false);
 
-  if (state === "n_a" || state === "not_found") return null;
+  if (state === "n_a") return null;
+
+  // A non-match is still an answer (W6): say so rather than hide the section.
+  if (state === "not_found") {
+    return (
+      <div class="sp-chain" data-testid="company-not-found">
+        <div class="sp-chain__node">
+          {company?.brand || "Unknown brand"}
+          <small>brand on this page</small>
+        </div>
+        <p class="muted" style="margin-top:10px">Owner not identified.</p>
+        <p class="muted" data-testid="no-records">No public records matched.</p>
+      </div>
+    );
+  }
 
   const tracked = flaggedRecordKinds(flaggedKinds);
   const records = [...(company.records ?? [])].sort(byDateDesc);
@@ -108,7 +122,7 @@ export function CompanyCard({ company, state, flaggedKinds }: Props) {
       )}
 
       {records.length === 0 && (
-        <p class="muted" style="margin-top:10px">No public records matched.</p>
+        <p class="muted" style="margin-top:10px" data-testid="no-records">No public records matched.</p>
       )}
     </div>
   );
