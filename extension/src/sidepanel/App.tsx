@@ -37,7 +37,14 @@ class CardErrorBoundary extends Component<{ name: string; children: ComponentChi
   }
 }
 
-function renderCard(c: StreamCard, settings: Settings, purchaseTypes: string[], lockIn?: AnalyseResult["lock_in"], localDrift?: import("../priceDrift").PriceDriftData | null) {
+function renderCard(
+  c: StreamCard,
+  settings: Settings,
+  purchaseTypes: string[],
+  lockIn?: AnalyseResult["lock_in"],
+  localDrift?: import("../priceDrift").PriceDriftData | null,
+  onFlagCompany?: (correction?: string) => Promise<boolean>,
+) {
   const p = c.payload as never;
   switch (c.card as CardName) {
     case "item":
@@ -45,7 +52,6 @@ function renderCard(c: StreamCard, settings: Settings, purchaseTypes: string[], 
     case "cost":
       return <CostCard costStreams={(c.payload as { cost_streams?: AnalyseResult["cost_streams"] }).cost_streams ?? []} state={c.state} horizon={settings.horizon} lockIn={lockIn} />;
     case "price_drift": {
-      // Local drift (computed in browser, V3) overrides the server's n_a placeholder.
       const drift = localDrift ?? p;
       const state = localDrift ? (localDrift.at_checkout !== localDrift.first_seen ? "found" : "n_a") : c.state;
       return <PriceDriftCard priceDrift={drift} state={state} />;
@@ -55,7 +61,7 @@ function renderCard(c: StreamCard, settings: Settings, purchaseTypes: string[], 
     case "small_print":
       return <SmallPrintCard items={Array.isArray(c.payload) ? (c.payload as AnalyseResult["small_print"]) : []} state={c.state} />;
     case "company":
-      return <CompanyCard company={p} state={c.state} flaggedKinds={settings.recordKinds} />;
+      return <CompanyCard company={p} state={c.state} flaggedKinds={settings.recordKinds} onFlag={onFlagCompany} />;
   }
 }
 
@@ -196,6 +202,35 @@ export function App() {
   const purchaseTypes = request?.purchase_type_signals ?? [];
   const lockInCard = cards.find((c) => c.card === "lock_in");
 
+  const companyCard = cards.find((c) => c.card === "company");
+  const itemCard = cards.find((c) => c.card === "item");
+
+  const onFlagCompany = serverUrl
+    ? async (correction?: string): Promise<boolean> => {
+        try {
+          const installId = await getInstallId();
+          const r = await fetch(`${serverUrl}/flag/company-match`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(installId ? { "X-Install-Id": installId } : {}),
+            },
+            body: JSON.stringify({
+              brand: (companyCard?.payload as AnalyseResult["company"] | undefined)?.brand,
+              matched_parent: (companyCard?.payload as AnalyseResult["company"] | undefined)?.parent,
+              ch_number: (companyCard?.payload as AnalyseResult["company"] | undefined)?.ch_number,
+              match_via: (companyCard?.payload as AnalyseResult["company"] | undefined)?.match_via,
+              page_url: (itemCard?.payload as Partial<AnalyseResult["item"]> | undefined)?.url ?? request?.item.url ?? "",
+              correction,
+            }),
+          });
+          return r.ok;
+        } catch {
+          return false;
+        }
+      }
+    : undefined;
+
   return (
     <div class="panel">
       <header class="sp-header">
@@ -227,7 +262,14 @@ export function App() {
       <div class="cards" aria-live="polite" aria-busy={status === "streaming"}>
         {visible.map((c) => (
           <CardErrorBoundary key={c.card} name={c.card}>
-            {renderCard(c, settings, purchaseTypes, lockInCard?.state === "found" || lockInCard?.state === "estimated" ? (lockInCard.payload as AnalyseResult["lock_in"]) : undefined, localDrift)}
+            {renderCard(
+              c,
+              settings,
+              purchaseTypes,
+              lockInCard?.state === "found" || lockInCard?.state === "estimated" ? (lockInCard.payload as AnalyseResult["lock_in"]) : undefined,
+              localDrift,
+              onFlagCompany,
+            )}
           </CardErrorBoundary>
         ))}
       </div>

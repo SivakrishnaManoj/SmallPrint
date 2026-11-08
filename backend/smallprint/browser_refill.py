@@ -3,7 +3,7 @@
 When the Tavily search path (find_refill in refill.py) returns None,
 this agent fetches the product page, finds links whose anchor text or
 href suggests a refill or replacement, fetches those pages, and runs
-the same Haiku extractor over them.
+the same LLM extractor over them.
 
 Read-only: httpx GET requests only. Never clicks, fills forms or buys.
 Respects the same spend tracker and quote-verification rules as the search path.
@@ -15,7 +15,7 @@ import re
 from urllib.parse import urljoin, urlsplit
 
 import httpx
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from smallprint.extract.extractor import _extract_chunk
 from smallprint.extract.text import chunk_text, html_to_text
@@ -76,7 +76,7 @@ async def _fetch_html(http: httpx.AsyncClient, url: str) -> str | None:
 
 
 async def browse_for_refill(
-    client: AsyncAnthropic,
+    client: AsyncOpenAI,
     http: httpx.AsyncClient,
     *,
     name: str | None,

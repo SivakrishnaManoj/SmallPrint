@@ -1,7 +1,7 @@
 """FastAPI server for SmallPrint /analyse endpoint.
 
 POST /analyse  — streams SSE card events. Real pipeline (server/pipeline.py) when
-                 ANTHROPIC_API_KEY is set; otherwise the fixtures (mock mode).
+                 OPENAI_API_KEY is set; otherwise the fixtures (mock mode).
 GET  /health   — liveness check
 """
 from __future__ import annotations
@@ -10,9 +10,12 @@ import json
 import os
 import random
 import secrets
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import AsyncGenerator
 
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
@@ -23,18 +26,18 @@ from smallprint.spend import SpendTracker, tracker as default_tracker
 from smallprint.tc_cache import TermsCache, cache as default_cache
 
 from .fixtures import pick_fixture
-from .models import AnalyseRequest
+from .models import AnalyseRequest, FlagCompanyMatchBody
 from .pipeline import stream_real
 from .rate_limit import check as rate_check
 
-_llm_client: AsyncAnthropic | None = None
+_llm_client: AsyncOpenAI | None = None
 
 
-def get_llm_client() -> AsyncAnthropic | None:
-    """The Anthropic client, or None in mock mode (no ANTHROPIC_API_KEY)."""
+def get_llm_client() -> AsyncOpenAI | None:
+    """The OpenAI client, or None in mock mode (no OPENAI_API_KEY)."""
     global _llm_client
-    if _llm_client is None and os.environ.get("ANTHROPIC_API_KEY"):
-        _llm_client = AsyncAnthropic()
+    if _llm_client is None and os.environ.get("OPENAI_API_KEY"):
+        _llm_client = AsyncOpenAI()
     return _llm_client
 
 
@@ -156,8 +159,60 @@ async def _stream_cards(result: dict) -> AsyncGenerator[dict, None]:
 # Routes
 # ---------------------------------------------------------------------------
 
+_FLAG_TABLE_SQL = """
+    CREATE TABLE IF NOT EXISTS company_flags (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at  TEXT NOT NULL,
+        brand       TEXT,
+        matched_parent TEXT,
+        ch_number   TEXT,
+        match_via   TEXT,
+        page_url    TEXT NOT NULL,
+        correction  TEXT,
+        install_id  TEXT
+    )
+"""
+
+
+def _get_flags_db() -> Path:
+    """Return the path to the flags SQLite database, creating the table if needed."""
+    db = Path(os.environ.get("FLAGS_DB", "data/flags.sqlite"))
+    db.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db) as conn:
+        conn.execute(_FLAG_TABLE_SQL)
+    return db
+
+
 @app.get("/health")
 async def health() -> dict:
+    return {"ok": True}
+
+
+@app.post("/flag/company-match")
+async def flag_company_match(
+    body: FlagCompanyMatchBody,
+    x_install_id: str | None = Header(default=None),
+) -> dict:
+    """Record a shopper's report that the brand→parent company match is wrong."""
+    db = _get_flags_db()
+    install_id = (x_install_id or "").strip() or body.install_id or None
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            """INSERT INTO company_flags
+               (created_at, brand, matched_parent, ch_number, match_via,
+                page_url, correction, install_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                datetime.now(timezone.utc).isoformat(),
+                body.brand,
+                body.matched_parent,
+                body.ch_number,
+                body.match_via,
+                body.page_url,
+                body.correction,
+                install_id,
+            ),
+        )
     return {"ok": True}
 
 

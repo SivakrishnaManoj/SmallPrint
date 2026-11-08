@@ -7,7 +7,7 @@ import httpx
 import httpx2
 import jsonschema
 import pytest
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from server import main
 from smallprint.search_fallback import TavilySearch
@@ -31,9 +31,9 @@ def fakes(monkeypatch):
     def llm(request):
         calls["llm"] += 1
         return httpx2.Response(200, json={
-            "id": "m", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
-            "content": [{"type": "text", "text": json.dumps(GOOD)}], "stop_reason": "end_turn",
-            "stop_sequence": None, "usage": {"input_tokens": 1500, "output_tokens": 200}})
+            "id": "c", "object": "chat.completion", "created": 0, "model": "gpt-4o-mini",
+            "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": json.dumps(GOOD), "refusal": None}}],
+            "usage": {"prompt_tokens": 1500, "completion_tokens": 200, "total_tokens": 1700}})
 
     def tavily(request):
         calls["tavily"].append(json.loads(request.content))
@@ -41,7 +41,7 @@ def fakes(monkeypatch):
                                          "results": [{"title": "t", "url": REFILL_URL, "content": "s", "score": 1,
                                                       "raw_content": PAGE}]})
 
-    client = AsyncAnthropic(api_key="t", max_retries=0, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(llm)))
+    client = AsyncOpenAI(api_key="t", max_retries=0, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(llm)))
     search = TavilySearch("tvly-t", http=httpx.AsyncClient(transport=httpx.MockTransport(tavily)))
     monkeypatch.setattr(main, "get_llm_client", lambda: client)
     monkeypatch.setattr(main, "get_search", lambda: search)

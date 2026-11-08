@@ -9,35 +9,101 @@ Done when:
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
 import httpx
 import pytest
 
-from smallprint.company import _extract_domain, _parse_wikidata, company_lookup
+from smallprint.company import (
+    _extract_domain,
+    _normalise_ch_number,
+    _parent_ids,
+    _pick_candidate,
+    company_lookup,
+)
 
 # ---------------------------------------------------------------------------
-# Recorded Wikidata SPARQL responses (abbreviated; real binding structure)
+# Fake Wikidata API responses (wbsearchentities and wbgetentities shapes)
 # ---------------------------------------------------------------------------
 
-_SODASTREAM_WIKIDATA = {
-    "results": {
-        "bindings": [
-            {
-                "brand":       {"type": "uri",     "value": "http://www.wikidata.org/entity/Q1127717"},
-                "brandLabel":  {"type": "literal", "value": "SodaStream"},
-                "parent":      {"type": "uri",     "value": "http://www.wikidata.org/entity/Q131688"},
-                "parentLabel": {"type": "literal", "value": "PepsiCo"},
-                "parentCh":    {"type": "literal", "value": "SC127671"},
-            }
-        ]
-    }
-}
+def _claim(prop: str, value, *, rank: str = "normal", ended: bool = False) -> dict:
+    snak = {"datatype": "string", "datavalue": {"value": value, "type": "string"}}
+    claim: dict = {"mainsnak": {"property": prop, **snak}, "rank": rank}
+    if ended:
+        claim["qualifiers"] = {"P582": [{"property": "P582"}]}
+    return {prop: [claim]}
 
-_EMPTY_WIKIDATA = {"results": {"bindings": []}}
+
+def _item_claim(prop: str, qid: str, **kw) -> dict:
+    c = _claim(prop, {"entity-type": "item", "id": qid}, **kw)
+    return c
+
+
+def _entity(qid: str, label: str, *claim_dicts: dict) -> dict:
+    claims: dict = {}
+    for d in claim_dicts:
+        for prop, lst in d.items():
+            claims.setdefault(prop, []).extend(lst)
+    return {"id": qid, "labels": {"en": {"language": "en", "value": label}}, "claims": claims}
+
+
+def _search_hits(*pairs: tuple[str, str]) -> dict:
+    return {"search": [{"id": q, "label": lbl, "match": {"type": "label", "text": lbl}} for q, lbl in pairs]}
+
+
+def _wikidata(search: dict, entities: dict[str, dict]):
+    """A route callable that answers wbsearchentities and wbgetentities like the real API."""
+    def answer(request: httpx.Request):
+        params = request.url.params
+        if params.get("action") == "wbsearchentities":
+            return search
+        ids = params.get("ids", "").split("|")
+        return {"entities": {q: entities.get(q, {"id": q, "missing": ""}) for q in ids}}
+    return answer
+
+
+# SodaStream has no UK number of its own; its single parent has one.
+_SODASTREAM_WIKIDATA = _wikidata(
+    _search_hits(("Q1127717", "SodaStream")),
+    {
+        "Q1127717": _entity("Q1127717", "SodaStream", _item_claim("P749", "Q131688"),
+                            _claim("P856", "https://sodastream.com/")),
+        "Q131688": _entity("Q131688", "PepsiCo", _claim("P2622", "SC127671")),
+    },
+)
+
+# Tesco: own CH number, several shareholders under P127 (so no "parent"), and a
+# store item with the same label that must not be picked.
+_TESCO_WIKIDATA = _wikidata(
+    _search_hits(("Q487494", "Tesco"), ("Q138568738", "Tesco")),
+    {
+        "Q487494": _entity("Q487494", "Tesco", _claim("P2622", "445790"),
+                           _item_claim("P127", "Q1"), _item_claim("P127", "Q2"),
+                           _claim("P856", "https://www.tescoplc.com/")),
+        "Q138568738": _entity("Q138568738", "Tesco", _item_claim("P749", "Q487494")),
+    },
+)
+
+# Two items with the same name and the same kind of evidence: ambiguous.
+_AMBIGUOUS_WIKIDATA = _wikidata(
+    _search_hits(("Q10", "Fernly"), ("Q11", "Fernly")),
+    {
+        "Q10": _entity("Q10", "Fernly", _claim("P856", "https://fernly.example/")),
+        "Q11": _entity("Q11", "Fernly", _claim("P856", "https://fernly.example.org/")),
+    },
+)
+
+_EMPTY_WIKIDATA = _wikidata({"search": []}, {})
 
 _GLEIF_AUTOCOMPLETE_EMPTY = {"data": []}
+
+
+def _gleif(name: str, number: str | None, authority: str = "RA000585") -> dict:
+    return {"data": [{"id": "LEI0000000000000001", "attributes": {"entity": {
+        "legalName": {"name": name}, "registeredAt": {"id": authority}, "registeredAs": number,
+    }}}]}
 
 _CH_EXACTMATCH = {
     "items": [
@@ -68,6 +134,8 @@ class FakeTransport(httpx.AsyncBaseTransport):
             if url.startswith(prefix):
                 if body is None:
                     return httpx.Response(404, json={"error": "not found"})
+                if callable(body):
+                    body = body(request)
                 return httpx.Response(200, json=body)
         return httpx.Response(404, json={"error": "not found"})
 
@@ -145,19 +213,70 @@ def test_extract_domain_empty():
 
 
 # ---------------------------------------------------------------------------
-# _parse_wikidata
+# Wikidata matching rules
 # ---------------------------------------------------------------------------
 
-def test_parse_wikidata_known_brand():
-    parent, ch, via = _parse_wikidata(_SODASTREAM_WIKIDATA["results"]["bindings"])
-    assert parent == "PepsiCo"
-    assert ch == "SC127671"
-    assert via == "Wikidata"
+@pytest.mark.parametrize("raw, expected", [
+    ("00445790", "00445790"),
+    ("445790", "00445790"),        # Wikidata often drops leading zeros
+    (" sc127671 ", "SC127671"),
+    ("GB123", None),
+    ("not a number", None),
+    ("", None),
+    (None, None),
+])
+def test_normalise_ch_number(raw, expected):
+    assert _normalise_ch_number(raw) == expected
 
 
-def test_parse_wikidata_empty_returns_none():
-    parent, ch, via = _parse_wikidata([])
-    assert parent is None and ch is None and via is None
+def test_several_owners_mean_no_parent():
+    shareholders = _entity("Q1", "X", _item_claim("P127", "Q2"), _item_claim("P127", "Q3"))
+    assert _parent_ids(shareholders) == []
+
+
+def test_single_owner_is_the_parent_and_parent_org_wins():
+    assert _parent_ids(_entity("Q1", "X", _item_claim("P127", "Q2"))) == ["Q2"]
+    both = _entity("Q1", "X", _item_claim("P749", "Q5"), _item_claim("P127", "Q2"))
+    assert _parent_ids(both) == ["Q5"]
+
+
+def test_ended_or_deprecated_ownership_is_ignored():
+    old = _entity("Q1", "X", _item_claim("P127", "Q2", ended=True))
+    assert _parent_ids(old) == []
+
+
+def test_pick_prefers_domain_match():
+    cands = {
+        "Q1": _entity("Q1", "A", _claim("P856", "https://a.example.com/")),
+        "Q2": _entity("Q2", "A", _claim("P856", "https://b.example.org/")),
+    }
+    assert _pick_candidate(cands, "b.example.org") == "Q2"
+
+
+def test_pick_single_item_with_own_ch_number():
+    cands = {
+        "Q1": _entity("Q1", "A", _claim("P2622", "00445790")),
+        "Q2": _entity("Q2", "A", _item_claim("P749", "Q1")),
+    }
+    assert _pick_candidate(cands, "") == "Q1"
+
+
+def test_pick_refuses_when_ambiguous():
+    cands = {
+        "Q1": _entity("Q1", "A", _claim("P856", "https://a.example/")),
+        "Q2": _entity("Q2", "A", _claim("P856", "https://b.example/")),
+    }
+    assert _pick_candidate(cands, "other.example") is None
+
+
+def test_pick_refuses_lone_item_without_website_or_ch_number():
+    cands = {"Q1": _entity("Q1", "Apple", _item_claim("P749", "Q312"))}
+    assert _pick_candidate(cands, "apple.com") is None
+
+
+def test_pick_ignores_people():
+    person = _entity("Q1", "BT", _item_claim("P31", "Q5"), _claim("P856", "https://bt.example/"))
+    assert _pick_candidate({"Q1": person}, "bt.example") is None
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +285,7 @@ def test_parse_wikidata_empty_returns_none():
 
 async def test_known_brand_resolves_via_wikidata(db):
     http, transport = _client({
-        "https://query.wikidata.org": _SODASTREAM_WIKIDATA,
+        "https://www.wikidata.org": _SODASTREAM_WIKIDATA,
         "https://api.gleif.org":      _GLEIF_AUTOCOMPLETE_EMPTY,
     })
     async with http:
@@ -184,7 +303,7 @@ async def test_known_brand_resolves_via_wikidata(db):
 
 async def test_unknown_brand_returns_not_identified(db):
     http, transport = _client({
-        "https://query.wikidata.org": _EMPTY_WIKIDATA,
+        "https://www.wikidata.org": _EMPTY_WIKIDATA,
         "https://api.gleif.org":      _GLEIF_AUTOCOMPLETE_EMPTY,
         "https://api.company-information.service.gov.uk": _CH_NO_MATCH,
     })
@@ -202,7 +321,7 @@ async def test_unknown_brand_returns_not_identified(db):
 
 async def test_ch_fallback_on_exact_name_match(db):
     http, transport = _client({
-        "https://query.wikidata.org": _EMPTY_WIKIDATA,
+        "https://www.wikidata.org": _EMPTY_WIKIDATA,
         "https://api.gleif.org":      _GLEIF_AUTOCOMPLETE_EMPTY,
         "https://api.company-information.service.gov.uk": _CH_EXACTMATCH,
     })
@@ -219,7 +338,7 @@ async def test_ch_fallback_on_exact_name_match(db):
 
 async def test_ch_fallback_does_not_accept_partial_match(db):
     http, _ = _client({
-        "https://query.wikidata.org": _EMPTY_WIKIDATA,
+        "https://www.wikidata.org": _EMPTY_WIKIDATA,
         "https://api.gleif.org":      _GLEIF_AUTOCOMPLETE_EMPTY,
         "https://api.company-information.service.gov.uk": _CH_EXACTMATCH,
     })
@@ -236,7 +355,7 @@ async def test_ch_fallback_does_not_accept_partial_match(db):
 async def test_records_joined_on_ch_number_only(db):
     """A matched CH number returns its records; a different CH number's records don't appear."""
     http, _ = _client({
-        "https://query.wikidata.org": _SODASTREAM_WIKIDATA,
+        "https://www.wikidata.org": _SODASTREAM_WIKIDATA,
         "https://api.gleif.org":      _GLEIF_AUTOCOMPLETE_EMPTY,
     })
     async with http:
@@ -253,7 +372,7 @@ async def test_records_joined_on_ch_number_only(db):
 
 async def test_no_verdict_words_in_output(db):
     http, _ = _client({
-        "https://query.wikidata.org": _SODASTREAM_WIKIDATA,
+        "https://www.wikidata.org": _SODASTREAM_WIKIDATA,
         "https://api.gleif.org":      _GLEIF_AUTOCOMPLETE_EMPTY,
     })
     async with http:
@@ -277,7 +396,7 @@ async def test_empty_brand_returns_not_identified(db):
 async def test_wikidata_http_error_falls_through_to_ch(db):
     """A Wikidata failure is not fatal — CH lookup still runs."""
     routes = {
-        "https://query.wikidata.org": None,  # will 404
+        "https://www.wikidata.org": None,  # will 404
         "https://api.gleif.org":      _GLEIF_AUTOCOMPLETE_EMPTY,
         "https://api.company-information.service.gov.uk": _CH_EXACTMATCH,
     }
@@ -290,3 +409,85 @@ async def test_wikidata_http_error_falls_through_to_ch(db):
         )
     assert result["ch_number"] == "01234567"
     assert result["match_via"] == "Companies House exact name"
+
+
+# ---------------------------------------------------------------------------
+# Wikidata edge cases, GLEIF and the live check
+# ---------------------------------------------------------------------------
+
+async def test_own_ch_number_wins_and_shareholders_are_not_a_parent(db):
+    http, _ = _client({
+        "https://www.wikidata.org": _TESCO_WIKIDATA,
+        "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY,
+    })
+    async with http:
+        result = await company_lookup("Tesco", "https://www.tesco.com/x", http=http, db_path=db, ch_api_key="")
+    assert result["ch_number"] == "00445790"   # padded from "445790"
+    assert result["parent"] is None
+    assert result["match_via"] == "Wikidata"
+
+
+async def test_ambiguous_wikidata_match_is_not_guessed(db):
+    http, _ = _client({
+        "https://www.wikidata.org": _AMBIGUOUS_WIKIDATA,
+        "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY,
+        "https://api.company-information.service.gov.uk": _CH_NO_MATCH,
+    })
+    async with http:
+        result = await company_lookup("Fernly", "https://fernly.example", http=http, db_path=db, ch_api_key="key")
+    assert result["ch_number"] is None
+    assert result["match_via"] == "Brand not identified"
+
+
+async def test_gleif_exact_name_at_companies_house(db):
+    http, transport = _client({
+        "https://www.wikidata.org": _EMPTY_WIKIDATA,
+        "https://api.gleif.org": _gleif("FERNLINE HOLDINGS PLC", "01234567"),
+    })
+    async with http:
+        result = await company_lookup("Fernline Holdings plc", "fernline.co.uk", http=http, db_path=db, ch_api_key="")
+    assert result["ch_number"] == "01234567"
+    assert result["match_via"] == "GLEIF"
+    assert result["parent"] == "FERNLINE HOLDINGS PLC"
+    assert any("api.gleif.org/api/v1/lei-records" in u for u in transport.calls)
+
+
+async def test_gleif_ignores_partial_name_and_other_registries(db):
+    for body in (
+        _gleif("FERNLINE HOLDINGS PLC", "01234567"),                          # brand is only "Fernline"
+        _gleif("Fernline", "01234567", authority="RA000665"),                 # not Companies House
+        _gleif("Fernline", None),                                             # no registration number
+    ):
+        http, _ = _client({"https://www.wikidata.org": _EMPTY_WIKIDATA, "https://api.gleif.org": body})
+        async with http:
+            result = await company_lookup("Fernline", "fernline.co.uk", http=http, db_path=db, ch_api_key="")
+        assert result["match_via"] == "Brand not identified"
+
+
+async def test_wikidata_timeout_falls_through(db):
+    def slow(request):
+        raise httpx.ReadTimeout("timed out", request=request)
+    http, _ = _client({
+        "https://www.wikidata.org": slow,
+        "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY,
+        "https://api.company-information.service.gov.uk": _CH_EXACTMATCH,
+    })
+    async with http:
+        result = await company_lookup("FERNLINE HOLDINGS PLC", "fernline.co.uk", http=http, db_path=db, ch_api_key="key")
+    assert result["ch_number"] == "01234567"
+    assert result["match_via"] == "Companies House exact name"
+
+
+@pytest.mark.skipif(os.environ.get("RUN_LIVE_TESTS") != "1", reason="live network test: set RUN_LIVE_TESTS=1")
+async def test_live_known_brand_resolves_quickly(tmp_path):
+    """Real Wikidata: catches a query that is too slow or reads the wrong property.
+
+    The faked tests above cannot, which is how a SPARQL query that timed out on every
+    real brand once passed them.
+    """
+    import time
+    started = time.monotonic()
+    result = await company_lookup("Tesco", "https://www.tesco.com/", db_path=tmp_path / "none.sqlite", ch_api_key="")
+    assert result["ch_number"] == "00445790"
+    assert result["match_via"] == "Wikidata"
+    assert time.monotonic() - started < 5

@@ -2,11 +2,15 @@ import { useState } from "preact/hooks";
 import { CardShell } from "./CardShell";
 import type { Company, CompanyRecord, CardState } from "../types";
 
+type FlagState = "idle" | "open" | "submitting" | "done" | "error";
+
 interface Props {
   company: Company;
   state: CardState;
   /** Record kinds the user ticked in settings ("values filter"). Settings IDs or record kinds. */
   flaggedKinds: string[];
+  /** Called when the user submits a wrong-match report. Returns true on success. */
+  onFlag?: (correction?: string) => Promise<boolean>;
 }
 
 /**
@@ -61,8 +65,17 @@ function Record({ r, flagged }: { r: CompanyRecord; flagged: boolean }) {
 
 const NoRecords = () => <p class="muted" data-testid="no-records">No public records matched.</p>;
 
-export function CompanyCard({ company, state, flaggedKinds }: Props) {
+export function CompanyCard({ company, state, flaggedKinds, onFlag }: Props) {
   const [showAll, setShowAll] = useState(false);
+  const [flagState, setFlagState] = useState<FlagState>("idle");
+  const [correction, setCorrection] = useState("");
+
+  async function handleFlag() {
+    if (!onFlag) return;
+    setFlagState("submitting");
+    const ok = await onFlag(correction.trim() || undefined);
+    setFlagState(ok ? "done" : "error");
+  }
 
   if (state === "n_a") {
     return <CardShell title="Who's behind it" state="n_a"><p class="muted">Company information doesn't apply to this page.</p></CardShell>;
@@ -93,6 +106,48 @@ export function CompanyCard({ company, state, flaggedKinds }: Props) {
           Matched by: {company.match_via ?? "Companies House number"}
           {company.ch_number && <> · Companies House {company.ch_number}</>}
         </p>
+      )}
+
+      {/* Wrong-match flag — only shown when a match was made and a handler is wired up */}
+      {onFlag && (company.match_via || company.ch_number) && (
+        <div class="company__flag" data-testid="company-flag">
+          {flagState === "idle" && (
+            <button type="button" class="company__flag-trigger" onClick={() => setFlagState("open")}>
+              Wrong match?
+            </button>
+          )}
+          {flagState === "open" && (
+            <div class="company__flag-form">
+              {company.parent && (
+                <p class="company__flag-prompt">
+                  Is <strong>{company.parent}</strong> the wrong parent for <strong>{company.brand}</strong>?
+                </p>
+              )}
+              <input
+                type="text"
+                class="text-input"
+                placeholder="Correct parent company (optional)"
+                value={correction}
+                maxLength={200}
+                onInput={(e) => setCorrection((e.target as HTMLInputElement).value)}
+              />
+              <div class="company__flag-actions">
+                <button type="button" class="btn btn--primary" onClick={handleFlag}>Flag this match</button>
+                <button type="button" class="btn btn--ghost" onClick={() => setFlagState("idle")}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {flagState === "submitting" && <span class="muted">Sending…</span>}
+          {flagState === "done" && (
+            <span class="company__flag-done" data-testid="flag-done">✓ Flagged — we'll review this match.</span>
+          )}
+          {flagState === "error" && (
+            <span class="company__flag-error">
+              Couldn't send.{" "}
+              <button type="button" class="company__flag-trigger" onClick={handleFlag}>Retry</button>
+            </span>
+          )}
+        </div>
       )}
 
       {records.length === 0 ? (
