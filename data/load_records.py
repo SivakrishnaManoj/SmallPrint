@@ -38,6 +38,24 @@ def normalise_ch(raw: str) -> str | None:
     return None
 
 
+def iso_date(raw: str) -> str | None:
+    """"15/06/2026", "2024/04/02 10:11:12" or "2026-01-31T…" → "YYYY-MM-DD", else None.
+
+    The panel formats and sorts records by ISO date, so every source is normalised here.
+    """
+    s = (raw or "").strip()
+    m = re.match(r"^(\d{2})/(\d{2})/(\d{4})", s)
+    if m:
+        return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+    m = re.match(r"^(\d{4})[/-](\d{2})[/-](\d{2})", s)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return None
+
+
+EC_DONATION_URL = "https://search.electoralcommission.org.uk/English/Donations/{}"
+
+
 def parse_gbp(value: str) -> str:
     """Return a clean £X,XXX string from Electoral Commission value column."""
     return value.strip().replace('"', "")
@@ -77,7 +95,7 @@ def load_gpg(cur: sqlite3.Cursor, path: Path) -> int:
             year_label = re.search(r"(\d{4} to \d{4})", path.name)
             year_str = year_label.group(1) if year_label else "latest"
             summary = f"Mean gender pay gap of {abs(pct):.1f}% {direction} ({year_str} reporting year)."
-            date = row.get("DateSubmitted", "").strip()[:10]
+            date = iso_date(row.get("DateSubmitted", ""))
             source_url = row.get("CompanyLinkToGPGInfo", "").strip() or None
             cur.execute(
                 "INSERT INTO records (ch_number, company_name, kind, date, summary, source_url) VALUES (?,?,?,?,?,?)",
@@ -106,7 +124,7 @@ def load_slavery(cur: sqlite3.Cursor) -> int:
             end = row.get("StatementEndDate", "").strip()
             period = f"{start} to {end}" if start and end else start or end or "unknown period"
             summary = f"Published a modern slavery and human trafficking statement covering {period}."
-            date = row.get("LastUpdated", "").strip()[:10]
+            date = iso_date(row.get("LastUpdated", ""))
             source_url = row.get("StatementURL", "").strip() or None
             cur.execute(
                 "INSERT INTO records (ch_number, company_name, kind, date, summary, source_url) VALUES (?,?,?,?,?,?)",
@@ -129,11 +147,13 @@ def load_donations(cur: sqlite3.Cursor) -> int:
                 continue
             recipient = row.get("RegulatedEntityName", "").strip()
             value = parse_gbp(row.get("Value", ""))
-            date = row.get("AcceptedDate", "").strip()
-            summary = f"Donated {value} to {recipient} (accepted {date})."
+            accepted = row.get("AcceptedDate", "").strip()
+            summary = f"Donated {value} to {recipient} (accepted {accepted})."
+            ec_ref = row.get("ECRef", "").strip()
+            source_url = EC_DONATION_URL.format(ec_ref) if ec_ref else None
             cur.execute(
                 "INSERT INTO records (ch_number, company_name, kind, date, summary, source_url) VALUES (?,?,?,?,?,?)",
-                (ch, name, "donation", date, summary, None),
+                (ch, name, "donation", iso_date(accepted), summary, source_url),
             )
             n += 1
     return n

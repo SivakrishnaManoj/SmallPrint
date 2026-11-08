@@ -57,9 +57,8 @@ def test_ch_number_lookup_returns_dated_records_with_source_urls(db):
         assert kind, "kind is blank"
         assert summary, "summary is blank"
         assert date, f"date is blank for kind={kind} ch={ch}"
-        # source_url is nullable for donations (Electoral Commission has no per-record URL)
-        # but must be present for GPG and modern slavery
-        if kind in ("gender_pay_gap", "modern_slavery"):
+        # Donations link to their Electoral Commission record page.
+        if kind in ("gender_pay_gap", "modern_slavery", "donation"):
             assert source_url, f"source_url missing for kind={kind} ch={ch}"
 
 
@@ -106,3 +105,43 @@ def test_adr_is_written():
     text = adr.read_text(encoding="utf-8")
     assert "CompanyNumber" in text, "ADR must mention the CompanyNumber column finding"
     assert "exact" in text.lower(), "ADR must describe the exact-name fallback decision"
+
+
+# --- Dates are ISO and every record has a link (the panel sorts and formats ISO dates;
+# --- the 40-URL test counts a record without a link as a wrong value).
+
+def _loader():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("load_records", LOADER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("raw, iso", [
+    ("15/06/2026", "2026-06-15"),           # modern slavery LastUpdated, EC AcceptedDate
+    ("2024/04/02 10:11:12", "2024-04-02"),  # gender pay gap DateSubmitted
+    ("2024/04/02", "2024-04-02"),
+    ("2026-01-31T00:00:00", "2026-01-31"),
+    ("", None),
+    ("not a date", None),
+])
+def test_iso_date(raw, iso):
+    assert _loader().iso_date(raw) == iso
+
+
+def test_record_dates_are_iso(db):
+    bad = db.execute(
+        "SELECT kind, date FROM records WHERE date IS NOT NULL "
+        "AND date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' LIMIT 5"
+    ).fetchall()
+    assert not bad, f"non-ISO dates: {bad}"
+
+
+def test_donations_link_to_their_electoral_commission_record(db):
+    missing = db.execute(
+        "SELECT COUNT(*) FROM records WHERE kind='donation' AND (source_url IS NULL OR source_url = '')"
+    ).fetchone()[0]
+    assert missing == 0
+    url = db.execute("SELECT source_url FROM records WHERE kind='donation' LIMIT 1").fetchone()[0]
+    assert url.startswith("https://search.electoralcommission.org.uk/English/Donations/")
