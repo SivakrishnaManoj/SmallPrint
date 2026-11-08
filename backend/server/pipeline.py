@@ -247,8 +247,11 @@ async def company_source(request: AnalyseRequest) -> list[Card]:
     except asyncio.TimeoutError:
         log.warning("company lookup timed out after %ss for brand=%s", COMPANY_TIMEOUT_S, brand)
         return [("company", "not_found", {**EMPTY_PAYLOAD["company"], "brand": brand})]
-    # "found" when we know who's behind it, even if no UK records could be joined.
-    state = "found" if result.get("ch_number") or result.get("parent") else "not_found"
+    # "found" when we know who's behind it, even if no UK records could be joined: a
+    # Companies House match, a known parent, or a record matched on the exact brand or
+    # parent name (the ethics datasets carry no CH number, ADR 0002).
+    found = result.get("ch_number") or result.get("parent") or result.get("records")
+    state = "found" if found else "not_found"
     return [("company", state, result)]
 
 

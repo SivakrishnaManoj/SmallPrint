@@ -84,6 +84,43 @@ def test_modern_slavery_null_ch_rows_exist(db):
     assert count > 0, "Expected some modern_slavery rows with ch_number=NULL"
 
 
+def test_ethics_kinds_are_present(db):
+    """The three ethics-consideration datasets must be loaded."""
+    kinds = {r[0] for r in db.execute("SELECT DISTINCT kind FROM records")}
+    assert "lgbtq_rights" in kinds
+    assert "abortion_rights" in kinds
+    assert "climate" in kinds
+
+
+def test_ethics_records_are_name_only(db):
+    """Ethics datasets carry no CH number — they join by name (ADR 0002)."""
+    for kind in ("lgbtq_rights", "abortion_rights", "climate"):
+        with_ch = db.execute(
+            "SELECT COUNT(*) FROM records WHERE kind=? AND ch_number IS NOT NULL", (kind,)
+        ).fetchone()[0]
+        assert with_ch == 0, f"{kind} should have no CH-numbered rows"
+        named = db.execute(
+            "SELECT COUNT(*) FROM records WHERE kind=? AND company_name != ''", (kind,)
+        ).fetchone()[0]
+        assert named > 0, f"{kind} should have name-keyed rows"
+
+
+def test_ethics_summaries_attribute_their_source(db):
+    """Neutral, source-attributed framing — not a bare advocacy label."""
+    for kind, needle in (
+        ("lgbtq_rights", "Listed by"),
+        ("abortion_rights", "Listed by"),
+        ("climate", "Science Based Targets"),
+    ):
+        row = db.execute("SELECT summary FROM records WHERE kind=? LIMIT 1", (kind,)).fetchone()
+        assert row and needle in row[0], f"{kind} summary missing '{needle}'"
+
+
+def test_climate_records_link_to_sbti(db):
+    row = db.execute("SELECT source_url FROM records WHERE kind='climate' LIMIT 1").fetchone()
+    assert row and row[0].startswith("https://sciencebasedtargets.org/")
+
+
 def test_ch_number_index_exists(db):
     indexes = {r[1] for r in db.execute("PRAGMA index_list(records)")}
     assert "idx_ch" in indexes

@@ -466,11 +466,26 @@ async def _ch_lookup(http: httpx.AsyncClient, brand: str, api_key: str) -> tuple
 # Records index
 # ---------------------------------------------------------------------------
 
-def _load_records(ch_number: str, db_path: Path) -> list[dict]:
-    """Return all records for this CH number, newest first. [] if DB absent."""
+def _load_records(ch_number: str | None, db_path: Path, names: tuple[str, ...] = ()) -> list[dict]:
+    """Return records for this company, newest first. [] if DB absent.
+
+    Two join paths (ADR 0001, extended by ADR 0002):
+      * CH number — the trusted join for records that carry one (gender pay gap,
+        modern slavery, donations).
+      * Exact organisation name (case-insensitive) — the only way to surface
+        records that carry no CH number (the ethics datasets: LGBTQ+ rights,
+        abortion rights, climate). Matched only against ``ch_number IS NULL`` rows,
+        so a name match can never override or duplicate a CH-keyed record.
+
+    ``names`` are the company's resolved brand and parent. No fuzzy or partial
+    matching: a looked-alike name can be a different legal entity.
+    ``ch_number`` is None when no UK company was found: only the name join runs then.
+    """
     if not db_path.exists():
         log.warning("records DB not found at %s", db_path)
         return []
+    seen: set[tuple] = set()
+    out: list[dict] = []
     try:
         con = sqlite3.connect(db_path)
         rows = con.execute(
@@ -478,11 +493,24 @@ def _load_records(ch_number: str, db_path: Path) -> list[dict]:
             "WHERE ch_number = ? ORDER BY date DESC",
             (ch_number,),
         ).fetchall()
+        for name in dict.fromkeys(n.strip() for n in names if n and n.strip()):
+            rows += con.execute(
+                "SELECT kind, summary, date, source_url FROM records "
+                "WHERE ch_number IS NULL AND company_name = ? COLLATE NOCASE",
+                (name,),
+            ).fetchall()
         con.close()
     except sqlite3.Error:
         log.exception("records query failed for ch_number=%s", ch_number)
         return []
-    return [{"kind": r[0], "summary": r[1], "date": r[2], "source_url": r[3]} for r in rows]
+    for r in rows:
+        key = (r[0], r[1], r[2], r[3])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"kind": r[0], "summary": r[1], "date": r[2], "source_url": r[3]})
+    out.sort(key=lambda r: (r["date"] or ""), reverse=True)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -577,22 +605,35 @@ async def company_lookup(
                 parent = parent or ch_name
                 ch = ch_num
 
-        if not ch:
-            if parent:
-                # The owner is known even though no UK company number is: say so.
-                return {"brand": brand, "parent": parent, "ch_number": None, "match_via": via, "records": []}
-            return _not_identified(brand)
+        db_records = _load_records(ch, db_path, names=(brand, parent or ""))
 
-        from smallprint.asa import fetch_asa_rulings
-        db_records = _load_records(ch, db_path)
-        asa_records = await fetch_asa_rulings(brand, parent=parent, http=http)
-        return {
-            "brand": brand,
-            "parent": parent,
-            "ch_number": ch,
-            "match_via": via,
-            "records": db_records + asa_records,
-        }
+        if ch:
+            from smallprint.asa import fetch_asa_rulings
+            asa_records = await fetch_asa_rulings(brand, parent=parent, http=http)
+            return {
+                "brand": brand,
+                "parent": parent,
+                "ch_number": ch,
+                "match_via": via,
+                "records": db_records + asa_records,
+            }
+
+        # No Companies House match. The ethics datasets (LGBTQ+ rights, abortion
+        # rights, climate) carry no CH number and are keyed on the exact brand or
+        # parent name, so they can still surface for a foreign parent that has no
+        # UK Companies House entry (e.g. PepsiCo, L'Oréal). ADR 0002.
+        if parent:
+            # The owner is known even though no UK company number is: say so.
+            return {"brand": brand, "parent": parent, "ch_number": None, "match_via": via, "records": db_records}
+        if db_records:
+            return {
+                "brand": brand,
+                "parent": None,
+                "ch_number": None,
+                "match_via": "Brand name match",
+                "records": db_records,
+            }
+        return _not_identified(brand)
 
     finally:
         if own_http:

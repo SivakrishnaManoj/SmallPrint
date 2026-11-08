@@ -25,6 +25,29 @@ async def test_company_card_state(monkeypatch, result, state):
     assert (name, got, payload) == ("company", state, result)
 
 
+async def test_records_matched_by_name_alone_make_the_card_found(monkeypatch):
+    result = {"brand": "PepsiCo", "parent": None, "ch_number": None, "match_via": "Brand name match",
+              "records": [{"kind": "lgbtq_rights", "summary": "Listed by ...", "date": None, "source_url": None}]}
+    async def fake_lookup(brand, domain, **_):
+        return result
+    monkeypatch.setattr(pipeline, "get_company_lookup", lambda: fake_lookup)
+    [(_, state, _)] = await pipeline.company_source(_request("PepsiCo"))
+    assert state == "found"
+
+
+async def test_the_pages_manufacturer_reaches_the_lookup(monkeypatch):
+    """Regression: a merge dropped manufacturer= from the call, so #85's exact UK match never ran."""
+    seen = {}
+    async def fake_lookup(brand, domain, **kwargs):
+        seen.update(kwargs)
+        return {"brand": brand, "parent": None, "ch_number": None, "match_via": "Brand not identified", "records": []}
+    monkeypatch.setattr(pipeline, "get_company_lookup", lambda: fake_lookup)
+    request = _request("PlayStation")
+    request.item.manufacturer = "Sony Interactive Entertainment Europe Ltd"
+    await pipeline.company_source(request)
+    assert seen.get("manufacturer") == "Sony Interactive Entertainment Europe Ltd"
+
+
 # Mock mode (no OPENAI_API_KEY): the company card comes from the real lookup, not the fixture.
 from server import main  # noqa: E402
 
