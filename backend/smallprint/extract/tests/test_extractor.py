@@ -255,6 +255,11 @@ def test_number_in_quote():
     assert _number_in_quote(20.0, "a fee of £20.00")
     assert not _number_in_quote(30, "one month's notice")
     assert not _number_in_quote(9.99, "£19.99")
+    # A price cut short shares its digits with the real one: 24 is not £24.99.
+    assert not _number_in_quote(24, "costs £24.99 a month")
+    assert not _number_in_quote(5, "£5.99 per month")
+    assert _number_in_quote(5, "a fee of £5. Cancel any time.")
+
 
 
 # --- text handling -------------------------------------------------------

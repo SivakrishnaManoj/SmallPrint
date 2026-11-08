@@ -115,7 +115,9 @@ def _number_in_quote(value: float | int, quote: str) -> bool:
         forms |= {str(int(value)), f"{int(value)}.00"}
     else:
         forms.add(f"{value:g}")
-    return any(re.search(rf"(?<![\d.]){re.escape(f)}(?![\d])", plain) for f in forms)
+    # Not preceded by a digit or decimal point, and not followed by a digit or by ".<digit>":
+    # 24 must not pass on the "24" in "£24.99" (a price cut short is a wrong price).
+    return any(re.search(rf"(?<![\d.]){re.escape(f)}(?!\d|\.\d)", plain) for f in forms)
 
 
 # "30 days", "28 calendar days", "2-week", "12 months"
