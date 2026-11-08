@@ -1,16 +1,16 @@
 category,url,notes
 # --- Amazon products (15) ---
-amazon,https://www.amazon.co.uk/dp/B09QYK3LZX,SodaStream Terra (refill product)
-amazon,https://www.amazon.co.uk/dp/B0CL5ZTP1N,Nespresso Vertuo Next (refill product)
-amazon,https://www.amazon.co.uk/dp/B09LK3B5NW,Gillette Fusion 5 razor (refill product)
-amazon,https://www.amazon.co.uk/dp/B08H93ZRK9,Oral-B Pro 2 electric toothbrush (refill heads)
-amazon,https://www.amazon.co.uk/dp/B09WFC9KNT,Canon PIXMA inkjet printer (ink refills)
-amazon,https://www.amazon.co.uk/dp/B0CWB8GHFT,Ninja Dual Zone air fryer
-amazon,https://www.amazon.co.uk/dp/B09GWM37L4,Kindle Paperwhite 11th Gen
-amazon,https://www.amazon.co.uk/dp/B09DRYJX2K,Instant Pot Duo 7-in-1 6L
+amazon,https://www.amazon.co.uk/dp/B097TD8V5P,SodaStream Terra (refill product)
+amazon,https://www.amazon.co.uk/dp/B092W97RH8,Nespresso Vertuo Next (refill product)
+amazon,https://www.amazon.co.uk/dp/B06XYLDYV1,Gillette Fusion5 razor (refill product)
+amazon,https://www.amazon.co.uk/dp/B08H93ZRK9,PlayStation 5 (listing title in French; was wrongly noted as Oral-B)
+amazon,https://www.amazon.co.uk/dp/B0D47NK73H,Canon PIXMA MG2551S inkjet printer (ink refills)
+amazon,https://www.amazon.co.uk/dp/B08CN3G4N9,Ninja Foodi Dual Zone air fryer AF300UK
+amazon,https://www.amazon.co.uk/dp/B0CTMSFXB5,Kindle Paperwhite 16GB (2024)
+amazon,https://www.amazon.co.uk/dp/B0DX2MKJSR,Instant Pot 5.7L 7-in-1 multicooker
 amazon,https://www.amazon.co.uk/dp/B09X7FXHVJ,SanDisk 128GB Extreme PRO SD card (was DeLonghi grinder before 2026-11-08)
-amazon,https://www.amazon.co.uk/dp/B0D5NW2WR8,Breville VST045 toasted sandwich maker
-amazon,https://www.amazon.co.uk/dp/B08BHWPXKW,LEGO Technic Land Rover Defender
+amazon,https://www.amazon.co.uk/dp/B0BLNBHM28,Breville VST025 sandwich/panini press
+amazon,https://www.amazon.co.uk/dp/B07PZF5F5P,LEGO Technic 42110 Land Rover Defender
 amazon,https://www.amazon.co.uk/dp/B09B96TG33,Echo Dot 2022
 amazon,https://www.amazon.co.uk/dp/B0FHJ91JY5,Ring Battery Video Doorbell
 amazon,https://www.amazon.co.uk/dp/B0DCBB2YTR,Anker PowerCore laptop charger
@@ -20,26 +20,26 @@ subscription,https://www.netflix.com/gb/signup,Netflix Standard with Ads
 subscription,https://www.spotify.com/gb/premium/,Spotify Premium
 subscription,https://www.disneyplus.com/en-gb/sign-up,Disney+ signup
 subscription,https://www.puregym.com/join/,PureGym monthly no-contract
-subscription,https://www.thegymgroup.com/join/,The Gym Group
+subscription,https://www.thegymgroup.com/,The Gym Group home page (/join/ and /membership/ return 404)
 subscription,https://www.hellofresh.co.uk/plans,HelloFresh meal kit subscription
 subscription,https://www.audible.co.uk/ep/whats-audible,Audible UK membership
-subscription,https://www.microsoft.com/en-gb/microsoft-365/personal,Microsoft 365 Personal annual
+subscription,https://www.microsoft.com/en-gb/microsoft-365/buy/compare-all-microsoft-365-products,Microsoft 365 plans and prices
 subscription,https://www.bt.com/broadband/full-fibre/,BT Full Fibre broadband 24-month contract
-subscription,https://www.sky.com/shop/broadband,Sky Broadband 18-month contract
+subscription,https://www.sky.com/broadband,Sky Broadband deals
 # --- Other JSON-LD retailers (10) ---
-jsonld,https://www.argos.co.uk/product/9215346,Argos product
+jsonld,https://www.lakeland.co.uk/products/lakeland-3-5l-digital-slow-cooker,Lakeland 3.5L slow cooker (replaces Argos: bot check)
 jsonld,https://www.johnlewis.com/bosch-series-6-wgg254f1gb-i-dos-freestanding-washing-machine-10kg-load-1400rpm-spin-white/p113822669,Bosch washing machine on John Lewis
 jsonld,https://www.currys.co.uk/products/dyson-v8-cyclone-cordless-vacuum-cleaner-black-and-green-10302002.html,Dyson V8 on Currys
 jsonld,https://www.screwfix.com/p/stanley-b6cc304scr523-24ltr-electric-compressor-with-5-piece-accessory-kit-230v/48089,Stanley compressor on Screwfix
 jsonld,https://www.ikea.com/gb/en/p/billy-bookcase-white-00263850/,IKEA Billy bookcase
 jsonld,https://www.boots.com/boots-smooth-care-sensitive-bikini-and-underarm-wax-strips-16s-10334941,Boots wax strips
 jsonld,https://ao.com/product/dvn04x20w-beko-full-size-dishwasher-white-93709-23.aspx,Beko dishwasher on AO
-jsonld,https://www.next.co.uk/style/sv036170/y61832,Next product
+jsonld,https://www.waterstones.com/book/the-hobbit-classic-hardback/j-r-r-tolkien/9780261103283,Waterstones hardback (replaces Next: bot check)
 jsonld,https://www.wayfair.co.uk/furniture/pdp/breakwater-bay-exeter-extendable-dining-set-with-2-chairs-hvw98882.html,Wayfair dining set
 jsonld,https://www.prettylittlething.com/product/plt-label-lace-high-neck-contrast-velvet-drape-dress_plt106540,PLT velvet dress
 # --- Non-purchase pages (5) ---
 no_purchase,https://www.bbc.co.uk/news/technology,BBC News article
 no_purchase,https://en.wikipedia.org/wiki/United_Kingdom,Wikipedia article
-no_purchase,https://www.google.co.uk/search?q=best+coffee+maker,Google search results
+no_purchase,https://www.nhs.uk/conditions/common-cold/,NHS health page (replaces Google search: bot check)
 no_purchase,https://www.gov.uk/check-national-insurance-record,GOV.UK service page
 no_purchase,https://www.theguardian.com/uk-news,The Guardian news section
