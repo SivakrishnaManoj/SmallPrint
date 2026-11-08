@@ -25,6 +25,9 @@ export const KIND_LABELS: Record<string, string> = {
   regulator_decision: "Regulator decision",
   nmw_underpayment: "Minimum wage underpayment",
   prompt_payment: "Payment practices report",
+  lgbtq_rights: "LGBTQ+ rights",
+  abortion_rights: "Abortion rights",
+  climate: "Climate targets",
 };
 
 /** Settings IDs that differ from the record kind they mean. */

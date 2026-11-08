@@ -18,6 +18,7 @@ import pytest
 
 from smallprint.company import (
     _extract_domain,
+    _load_records,
     _normalise_ch_number,
     _parent_ids,
     _pick_candidate,
@@ -368,6 +369,44 @@ async def test_records_joined_on_ch_number_only(db):
     # Only SC127671 records should appear, not 01234567 (Fernline)
     assert all(r["kind"] in ("gender_pay_gap", "donation") for r in result["records"])
     assert not any("Fernline" in r["summary"] for r in result["records"])
+
+
+# ---------------------------------------------------------------------------
+# Exact-name join for the ethics datasets (ch_number = NULL). ADR 0002.
+# ---------------------------------------------------------------------------
+
+def test_name_join_surfaces_null_ch_records(db):
+    """A ch_number=NULL ethics record joins by exact brand or parent name."""
+    con = sqlite3.connect(db)
+    con.execute(
+        "INSERT INTO records (ch_number, company_name, kind, date, summary, source_url) VALUES (?,?,?,?,?,?)",
+        (None, "PepsiCo", "climate", "2025-01-01",
+         "Has a Science Based Targets initiative (SBTi) validated near-term emissions reduction target.",
+         "https://sciencebasedtargets.org/companies-taking-action/"),
+    )
+    con.commit()
+    con.close()
+
+    # CH SC127671 has the two PepsiCo CH-keyed records; the name match adds climate.
+    records = _load_records("SC127671", db, names=("PepsiCo", ""))
+    kinds = [r["kind"] for r in records]
+    assert "climate" in kinds
+    assert "gender_pay_gap" in kinds and "donation" in kinds
+
+
+def test_name_join_is_exact_only(db):
+    """A partial or different name must not pull in a null-CH record."""
+    con = sqlite3.connect(db)
+    con.execute(
+        "INSERT INTO records (ch_number, company_name, kind, date, summary, source_url) VALUES (?,?,?,?,?,?)",
+        (None, "PepsiCo", "climate", "2025-01-01", "SBTi target.", "https://sciencebasedtargets.org/"),
+    )
+    con.commit()
+    con.close()
+
+    assert not any(r["kind"] == "climate" for r in _load_records("SC127671", db, names=("Pepsi", "")))
+    # Case-insensitive exact match still works.
+    assert any(r["kind"] == "climate" for r in _load_records("SC127671", db, names=("pepsico", "")))
 
 
 async def test_no_verdict_words_in_output(db):
