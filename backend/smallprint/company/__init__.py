@@ -11,12 +11,12 @@ Chain (each step only runs if the previous found nothing):
      When several items share the name, the one whose website matches the page
      domain wins; otherwise the match must be unambiguous (one item with its own
      CH number, or a lone item with an official website).  Never a guess.
-     If nothing up the parent chain has a CH number, look down instead: a group
-     with exactly one UK subsidiary (P355) that has a CH number uses that one.
-     Several UK subsidiaries would be a guess, so then no number is chosen.
-  2. GLEIF — the parent's own LEI record (when Wikidata gave one) if it is
-     registered at Companies House, else its direct children registered at
-     Companies House when there is exactly one.  Then exact legal-name match
+     We never look *down* to a subsidiary: being a group's only UK-registered
+     child on record (a pension trustee, an overseas holding company) does not
+     make it the company behind the brand.  Live testing showed exactly that.
+  2. GLEIF — the LEI (P1278) of the company we display: its own record, if it
+     is registered at Companies House.  Never a child's or an ancestor's record,
+     whose filings belong to a different company.  Then exact legal-name match
      among GB LEI records registered at Companies House (registration authority
      RA000585), for the brand and then the parent's name; the CH number is the
      record's registeredAs value.
@@ -62,7 +62,6 @@ WIKIDATA_BUDGET_S = 3.5
 
 GLEIF_COMPANIES_HOUSE_RA = "RA000585"
 _MAX_PARENT_HOPS = 3
-_MAX_SUBSIDIARIES = 50  # one wbgetentities batch
 _CH_NUMBER_RE = re.compile(r"^(?:[A-Z]{2}\d{6}|\d{8})$")
 _LEI_RE = re.compile(r"^[A-Z0-9]{18}\d{2}$")
 
@@ -201,26 +200,6 @@ async def _wd_entities(http: httpx.AsyncClient, ids: list[str]) -> dict[str, dic
     return {k: v for k, v in (resp.json().get("entities") or {}).items() if "missing" not in v}
 
 
-async def _unique_uk_subsidiary(http: httpx.AsyncClient, groups: list[dict]) -> tuple[str | None, str | None]:
-    """(name, CH number) of the one UK subsidiary (P355) of these entities, or (None, None).
-
-    Several distinct UK subsidiaries would mean choosing one, which is a guess.
-    """
-    sub_ids = list(dict.fromkeys(q for e in groups for q in _claim_ids(e, "P355")))[:_MAX_SUBSIDIARIES]
-    if not sub_ids:
-        return None, None
-    subs = await _wd_entities(http, sub_ids)
-    found = {}
-    for e in subs.values():
-        ch = _normalise_ch_number(next(iter(_claim_values(e, "P2622")), None))
-        if ch:
-            found[ch] = _entity_label(e)
-    if len(found) == 1:
-        ch, name = next(iter(found.items()))
-        return name, ch
-    return None, None
-
-
 async def _wikidata_lookup(
     http: httpx.AsyncClient, brand: str, domain: str,
 ) -> tuple[str | None, str | None, str | None, str | None]:
@@ -258,10 +237,9 @@ async def _wikidata_lookup(
         own_ch = _normalise_ch_number(next(iter(_claim_values(entity, "P2622")), None))
         parents = _parent_ids(entity)
         parent_name: str | None = None
-        parent_lei: str | None = None
+        parent_entity: dict | None = None
         ch = own_ch
         via = "Wikidata"
-        ancestors: list[dict] = []
 
         # Walk up (breadth-first, at most _MAX_PARENT_HOPS levels) until some
         # ancestor has a Companies House number.
@@ -273,36 +251,29 @@ async def _wikidata_lookup(
             seen.update(frontier)
             level = await _wd_entities(http, frontier)
             if hop == 0:
-                parent_name = next((_entity_label(level[p]) for p in frontier if p in level and _entity_label(level[p])), None)
+                parent_entity = next((level[p] for p in frontier if p in level and _entity_label(level[p])), None)
+                parent_name = _entity_label(parent_entity) if parent_entity else None
             nxt: list[str] = []
             for pid in frontier:
                 pe = level.get(pid)
                 if not pe:
                     continue
-                ancestors.append(pe)
-                parent_lei = parent_lei or _lei(pe)
                 if ch is None:
                     pch = _normalise_ch_number(next(iter(_claim_values(pe, "P2622")), None))
                     if pch:
                         ch = pch
+                        parent_entity = pe
                         parent_name = _entity_label(pe) or parent_name
                 nxt.extend(_parent_ids(pe))
             if ch is not None:
                 break
             frontier = nxt
 
-        # Nothing up the chain is registered in the UK: look down from the group
-        # (the brand item and its ancestors) for exactly one UK subsidiary.
-        if ch is None:
-            sub_name, sub_ch = await _unique_uk_subsidiary(http, [entity, *ancestors])
-            if sub_ch:
-                ch = sub_ch
-                parent_name = parent_name or _entity_label(entity)
-                via = f"Wikidata, via its UK subsidiary {sub_name}" if sub_name else "Wikidata, via its UK subsidiary"
-
         if ch is None and parent_name is None:
             return None, None, None, None
-        return parent_name, ch, via, parent_lei or _lei(entity)
+        # The LEI of the company we will display: the parent shown, or the brand's own
+        # company when it has no parent.  Never another ancestor's.
+        return parent_name, ch, via, _lei(parent_entity if parent_entity else entity)
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
         log.debug("wikidata lookup failed for brand=%s", brand)
         return None, None, None, None
@@ -323,30 +294,18 @@ def _gleif_uk_number(record: dict) -> tuple[str | None, str | None]:
 
 
 async def _gleif_by_lei(http: httpx.AsyncClient, lei: str) -> tuple[str | None, str | None]:
-    """The company with this LEI if UK-registered, else its one UK-registered direct child.
+    """The company with exactly this LEI, if it is registered at Companies House.
 
-    Relationship records are GLEIF's own (exact), not a name search.  Several UK
-    children would mean choosing one, which is a guess, so then nothing is returned.
+    Only the company's own record.  Its children (or parents) are different
+    companies with their own filings, so they are never used.
     """
     try:
         own = await http.get(f"{GLEIF_API}/lei-records/{lei}", headers={"Accept": "application/vnd.api+json"}, timeout=TIMEOUT_S)
         own.raise_for_status()
-        name, ch = _gleif_uk_number(own.json().get("data") or {})
-        if ch:
-            return name, ch
-        kids = await http.get(
-            f"{GLEIF_API}/lei-records/{lei}/direct-children",
-            params={"page[size]": 100}, headers={"Accept": "application/vnd.api+json"}, timeout=TIMEOUT_S,
-        )
-        kids.raise_for_status()
-        uk = {c: n for n, c in (_gleif_uk_number(r) for r in kids.json().get("data") or []) if c}
+        return _gleif_uk_number(own.json().get("data") or {})
     except (httpx.HTTPError, ValueError):
         log.debug("gleif lei lookup failed for %s", lei)
         return None, None
-    if len(uk) == 1:
-        ch, name = next(iter(uk.items()))
-        return name, ch
-    return None, None
 
 
 async def _gleif_lookup(http: httpx.AsyncClient, brand: str) -> tuple[str | None, str | None]:
@@ -488,7 +447,7 @@ async def company_lookup(
             log.debug("wikidata lookup timed out for brand=%s", brand)
             parent, ch, via, parent_lei = None, None, None, None
 
-        # --- Step 2: GLEIF: the parent's LEI (own record, or its one UK child) ---
+        # --- Step 2: GLEIF: the displayed company's own LEI record ---
         if not ch and parent_lei:
             uk_name, uk_ch = await _gleif_by_lei(http, parent_lei)
             if uk_ch:
