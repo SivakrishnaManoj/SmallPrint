@@ -653,6 +653,30 @@ async def test_gleif_children_are_never_used(db):
     assert not any("direct-children" in u for u in transport.calls)
 
 
+async def test_known_parent_without_a_uk_number_keeps_its_name_matched_records(db):
+    """Pepsi Max -> PepsiCo, no UK number: the parent is shown and PepsiCo's name-keyed records too.
+
+    Regression: an early return for "parent known, no CH number" ran before the
+    name join (ADR 0002), so these records never reached the card.
+    """
+    con = sqlite3.connect(db)
+    con.execute(
+        "INSERT INTO records (ch_number, company_name, kind, date, summary, source_url) VALUES (?,?,?,?,?,?)",
+        (None, "PepsiCo", "lgbtq_rights", None, "Listed by Accountable for Equality as a corporate donor.", None),
+    )
+    con.commit()
+    con.close()
+    pepsico = _entity("Q200", "PepsiCo", _claim("P856", "https://www.pepsico.com/"))
+    http, _ = _client({
+        "https://www.wikidata.org": _pepsi_max(pepsico),
+        "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY,
+    })
+    async with http:
+        result = await company_lookup("Pepsi Max", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
+    assert result["ch_number"] is None and result["parent"] == "PepsiCo"
+    assert [r["kind"] for r in result["records"]] == ["lgbtq_rights"]
+
+
 async def test_an_ancestors_lei_beyond_the_displayed_owner_is_not_used(db):
     """Live testing: Virgin Media showed "Virgin Media O2" with a grandparent's company number."""
     grand_lei = "213800LIBERTYGLOBA12"
