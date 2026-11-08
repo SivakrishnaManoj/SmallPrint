@@ -13,6 +13,7 @@ import { CompanyCard } from "~panel/components/CompanyCard";
 import { FirstRunForm } from "~panel/components/FirstRunForm";
 import { CANNED_REQUEST, DEFAULT_SERVER_URL, TIMEOUTS, type AnalyseBody } from "../config";
 import { useActiveDetection } from "./activeDetection";
+import { usePriceDrift } from "./priceDriftHook";
 import { streamAnalyse } from "../sse";
 import { fetchTermsDocuments } from "../terms/fetchTerms";
 import { getInstallId } from "../install";
@@ -36,15 +37,19 @@ class CardErrorBoundary extends Component<{ name: string; children: ComponentChi
   }
 }
 
-function renderCard(c: StreamCard, settings: Settings, purchaseTypes: string[], lockIn?: AnalyseResult["lock_in"]) {
+function renderCard(c: StreamCard, settings: Settings, purchaseTypes: string[], lockIn?: AnalyseResult["lock_in"], localDrift?: import("../priceDrift").PriceDriftData | null) {
   const p = c.payload as never;
   switch (c.card as CardName) {
     case "item":
       return <ItemCard item={p as Partial<AnalyseResult["item"]>} state={c.state} purchaseTypes={purchaseTypes} />;
     case "cost":
       return <CostCard costStreams={(c.payload as { cost_streams?: AnalyseResult["cost_streams"] }).cost_streams ?? []} state={c.state} horizon={settings.horizon} lockIn={lockIn} />;
-    case "price_drift":
-      return <PriceDriftCard priceDrift={p} state={c.state} />;
+    case "price_drift": {
+      // Local drift (computed in browser, V3) overrides the server's n_a placeholder.
+      const drift = localDrift ?? p;
+      const state = localDrift ? (localDrift.at_checkout !== localDrift.first_seen ? "found" : "n_a") : c.state;
+      return <PriceDriftCard priceDrift={drift} state={state} />;
+    }
     case "lock_in":
       return <LockInCard lockIn={p} state={c.state} />;
     case "small_print":
@@ -71,6 +76,11 @@ export function App() {
   const run = useRef<AbortController | null>(null);
   const [demo, setDemo] = useState(false);
   const active = useActiveDetection();
+  const [tabId, setTabId] = useState<number | null>(null);
+  useEffect(() => {
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => setTabId(tab?.id ?? null)).catch(() => {});
+  }, [active?.url]);
+  const localDrift = usePriceDrift(tabId);
 
   // What to analyse: the active tab's detected purchase, or the canned request in demo mode.
   const request: AnalyseBody | null = demo
@@ -217,7 +227,7 @@ export function App() {
       <div class="cards" aria-live="polite" aria-busy={status === "streaming"}>
         {visible.map((c) => (
           <CardErrorBoundary key={c.card} name={c.card}>
-            {renderCard(c, settings, purchaseTypes, lockInCard?.state === "found" || lockInCard?.state === "estimated" ? (lockInCard.payload as AnalyseResult["lock_in"]) : undefined)}
+            {renderCard(c, settings, purchaseTypes, lockInCard?.state === "found" || lockInCard?.state === "estimated" ? (lockInCard.payload as AnalyseResult["lock_in"]) : undefined, localDrift)}
           </CardErrorBoundary>
         ))}
       </div>

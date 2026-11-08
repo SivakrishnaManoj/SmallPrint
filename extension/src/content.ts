@@ -4,7 +4,10 @@
  * the request only reaches the backend when the user opens the side panel.
  */
 import { detectPurchase } from "./detect";
-import type { DetectionMessage } from "./messages";
+import { isCheckout } from "./detect/checkout";
+import { computeDrift, extractCheckoutFees, extractCheckoutSubtotal } from "./priceDrift";
+import type { DetectionMessage, PriceDriftMessage } from "./messages";
+import { priceDriftKey } from "./priceDrift";
 
 let last = "";
 
@@ -17,6 +20,34 @@ function report() {
   chrome.runtime.sendMessage(msg).catch(() => {
     /* extension reloaded or service worker asleep; the next change re-sends */
   });
+  reportPriceDrift(detection);
+}
+
+/** On product pages: record first_seen price. On checkout: compute drift. */
+function reportPriceDrift(detection: ReturnType<typeof detectPurchase>) {
+  const onCheckout = isCheckout(new URL(location.href), document);
+
+  if (!onCheckout && detection.status === "purchase" && detection.request.item.price != null) {
+    // First time we see a price — store it; background ignores if already set.
+    chrome.storage.session.get(["pricedrift_firstseen_" + location.hostname]).then((r) => {
+      const key = "pricedrift_firstseen_" + location.hostname;
+      if (r[key] == null) chrome.storage.session.set({ [key]: detection.request.item.price });
+    }).catch(() => {});
+    return;
+  }
+
+  if (onCheckout) {
+    const hostname = location.hostname;
+    chrome.storage.session.get("pricedrift_firstseen_" + hostname).then((r) => {
+      const firstSeen: number | null = r["pricedrift_firstseen_" + hostname] ?? null;
+      if (firstSeen == null) return;
+      const fees = extractCheckoutFees(document);
+      const subtotal = extractCheckoutSubtotal(document);
+      const drift = computeDrift(firstSeen, subtotal, fees);
+      const msg: PriceDriftMessage = { type: "smallprint:pricedrift", drift };
+      chrome.runtime.sendMessage(msg).catch(() => {});
+    }).catch(() => {});
+  }
 }
 
 report();
