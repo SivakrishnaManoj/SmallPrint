@@ -7,15 +7,16 @@ import { detectPurchase } from "./detect";
 import { isCheckout } from "./detect/checkout";
 import { computeDrift, extractCheckoutFees, extractCheckoutSubtotal } from "./priceDrift";
 import type { DetectionMessage, PriceDriftMessage } from "./messages";
+import { debounceWithMaxWait, nextReport, type Reported } from "./reportGate";
 
-let last = "";
+let last: Reported | null = null;
 
 function report() {
-  const detection = detectPurchase(location.href, document);
-  const key = JSON.stringify(detection);
-  if (key === last) return;
-  last = key;
-  const msg: DetectionMessage = { type: "smallprint:detection", url: location.href, detection };
+  const url = location.href;
+  const detection = nextReport(last, url, detectPurchase(url, document));
+  if (!detection) return;
+  last = { url, detection };
+  const msg: DetectionMessage = { type: "smallprint:detection", url, detection };
   chrome.runtime.sendMessage(msg).catch(() => {
     /* extension reloaded or service worker asleep; the next change re-sends */
   });
@@ -54,12 +55,9 @@ report();
 // Single-page shops change product without a page load (W7). Two signals, both debounced:
 //  - the URL changes: history.pushState fires no event a content script can hear, so poll it;
 //  - the DOM changes: a new product renders into the same page.
-let timer: ReturnType<typeof setTimeout> | undefined;
-const soon = (ms: number) => {
-  clearTimeout(timer);
-  timer = setTimeout(report, ms);
-};
-new MutationObserver(() => soon(600)).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+// Some pages never stop changing, so a burst of changes still reports within 1.5 s.
+const soon = debounceWithMaxWait(report, 600, 1500);
+new MutationObserver(() => soon()).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
 let href = location.href;
 setInterval(() => {
   if (location.href === href) return;
