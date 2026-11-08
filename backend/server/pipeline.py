@@ -57,6 +57,26 @@ def _not_found(cards: tuple[str, ...], state: str = "not_found") -> list[Card]:
     return [(c, state, EMPTY_PAYLOAD[c]) for c in cards]
 
 
+def product_only(request: AnalyseRequest) -> bool:
+    """A one-off product: no subscription or contract signal from the page.
+
+    Lifetime cost and lock-in are for subscriptions and contracts. On a product page the
+    extractor reads the price, a finance offer or an add-on policy as a "monthly fee" or a
+    "notice period" (verbatim quotes, wrong meaning), so those cards don't apply there.
+    Small print (returns window, warranty, seller) still does. No signals = unknown: keep all.
+    """
+    signals = set(request.purchase_type_signals)
+    return "product" in signals and not signals & {"subscription", "contract"}
+
+
+def _without_cost_and_lock_in(result: dict) -> dict:
+    result["cost_streams"] = []
+    result["lock_in"] = {**{k: None for k in result["lock_in"] if k != "evidence"}, "evidence": []}
+    result["card_states"]["cost"] = "n_a"
+    result["card_states"]["lock_in"] = "n_a"
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Sources
 # ---------------------------------------------------------------------------
@@ -170,6 +190,8 @@ async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncOp
             result, refill = await asyncio.gather(run(), run_refill())
         else:
             result, refill = await run(), None
+        if result and product_only(request):
+            result = _without_cost_and_lock_in(result)
         if refill:
             result = result or build_cards({})
             result["cost_streams"].append(refill)
@@ -180,6 +202,8 @@ async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncOp
     # One budget for search, extraction and refill, so the cards always resolve in time.
     result = await asyncio.wait_for(run_all(), TERMS_TIMEOUT_S)
     if result is None:
+        if product_only(request):
+            return _not_found(("cost", "lock_in"), "n_a") + _not_found(("small_print",))
         return _not_found(TERMS_CARDS)
     states = result["card_states"]
     return [

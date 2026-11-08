@@ -118,9 +118,15 @@ function siteName(doc: Document, url: URL): string | null {
   return label ? label[0].toUpperCase() + label.slice(1) : null;
 }
 
+/** A <main> with fewer lines than this is an app shell; the offer sits elsewhere on the page. */
+const MIN_MAIN_LINES = 5;
+
 export function wordingDetector({ url, doc }: PageContext): DetectorHit | null {
-  const root = doc.querySelector("main") ?? doc.body;
-  const lines = textLines(root);
+  // Prefer <main>, so a news page's footer banner ("support us from £4/month") isn't a purchase.
+  const main = doc.querySelector("main");
+  const mainLines = main ? textLines(main) : [];
+  const root = main && mainLines.length >= MIN_MAIN_LINES ? main : doc.body;
+  const lines = root === main ? mainLines : textLines(root);
   const { signals } = wordingSignals(lines);
   if (signals.length === 0) return null;
 

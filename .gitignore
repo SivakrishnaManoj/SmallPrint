@@ -4,6 +4,8 @@ dist/
 __pycache__/
 *.pyc
 *.sqlite
+# Built by data/load_records.py from public CSVs; committed so Railway serves records.
+!data/records.sqlite
 *.egg-info/
 .venv/
 venv/
