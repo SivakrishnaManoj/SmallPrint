@@ -5,21 +5,22 @@ import { DEFAULT_SETTINGS } from "../types";
 
 interface Props {
   onComplete: (settings: Settings) => void;
-  /** Settings to start from. Pass the saved settings when the form is reopened from Settings. */
   initial?: Settings;
   title?: string;
 }
 
-const RECORD_KIND_OPTIONS = [
-  { id: "donation", label: "Political donations" },
-  { id: "gender_pay_gap", label: "Gender pay gap" },
-  { id: "modern_slavery", label: "Modern slavery statements" },
-  { id: "asa_ruling", label: "ASA advertising rulings" },
+const TILES = [
+  { id: "donation", label: "Political donations", source: "Electoral Commission" },
+  { id: "gender_pay_gap", label: "Gender pay gap", source: "GOV.UK" },
+  { id: "modern_slavery", label: "Modern slavery", source: "GOV.UK registry" },
+  { id: "asa_ruling", label: "Advertising rulings", source: "ASA" },
 ];
 
-export function FirstRunForm({ onComplete, initial = DEFAULT_SETTINGS, title = "Set up Small Print" }: Props) {
+export function FirstRunForm({ onComplete, initial = DEFAULT_SETTINGS, title }: Props) {
   const [horizon, setHorizon] = useState<12 | 24>(initial.horizon);
   const [recordKinds, setRecordKinds] = useState<string[]>(initial.recordKinds);
+
+  const isSetup = !title || title.toLowerCase().includes("set up");
 
   function toggleKind(id: string) {
     setRecordKinds((prev) =>
@@ -35,46 +36,78 @@ export function FirstRunForm({ onComplete, initial = DEFAULT_SETTINGS, title = "
 
   async function handleSave(e: Event) {
     e.preventDefault();
-    const settings: Settings = { horizon, recordKinds };
+    const settings: Settings = {
+      horizon,
+      recordKinds: recordKinds.filter((k) => k !== "asa_ruling"),
+    };
     await saveSettings(settings);
     onComplete(settings);
   }
 
   return (
-    <div class="first-run">
-      <h1 class="first-run__title">{title}</h1>
-      <p class="first-run__subtitle">Takes 30 seconds. You can change this any time.</p>
+    <div class="fr-panel">
+      <div class="fr-header">
+        <span class="sp-logo">SMALL<b>/</b>PRINT</span>
+        <small>{isSetup ? "Setup" : "Settings"}</small>
+      </div>
+      <div class="fr-body">
+        <form onSubmit={handleSave}>
+          {isSetup && (
+            <>
+              <h1 class="fr-headline">The price is only the <em>first</em> number.</h1>
+              <p class="fr-sub">See lifetime cost, lock-in terms and who owns the brand, quoted from the source.</p>
+            </>
+          )}
 
-      <form onSubmit={handleSave} class="first-run__form">
-        <fieldset>
-          <legend>Default horizon for cost calculations</legend>
-          <div class="toggle-group">
-            <button type="button" class={horizon === 12 ? "toggle active" : "toggle"} onClick={() => setHorizon(12)}>12 months</button>
-            <button type="button" class={horizon === 24 ? "toggle active" : "toggle"} onClick={() => setHorizon(24)}>24 months</button>
+          <p class="fr-q">Flag these public records</p>
+          <div class="fr-tiles">
+            {TILES.map((tile) => {
+              const on = recordKinds.includes(tile.id);
+              return (
+                <button
+                  key={tile.id}
+                  type="button"
+                  class={on ? "fr-tile fr-tile--on" : "fr-tile"}
+                  onClick={() => toggleKind(tile.id)}
+                >
+                  <div class="fr-tile__ic" />
+                  {tile.label}
+                  <small>{tile.source}</small>
+                </button>
+              );
+            })}
           </div>
-        </fieldset>
 
-        <fieldset>
-          <legend>Flag company records for</legend>
-          <div class="checkbox-group">
-            {RECORD_KIND_OPTIONS.map((opt) => (
-              <label key={opt.id} class="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={recordKinds.includes(opt.id)}
-                  onChange={() => toggleKind(opt.id)}
-                />
-                {opt.label}
-              </label>
-            ))}
+          <p class="fr-q">Show costs over</p>
+          <div class="fr-track">
+            <input
+              type="range"
+              min="12"
+              max="24"
+              step="12"
+              value={horizon}
+              class="fr-slider"
+              onInput={(e) => setHorizon(Number((e.target as HTMLInputElement).value) as 12 | 24)}
+            />
           </div>
-        </fieldset>
+          <div class="fr-track-labels">
+            {horizon === 12 ? <b>12 months</b> : <span>12 months</span>}
+            {horizon === 24 ? <b>24 months</b> : <span>24 months</span>}
+          </div>
 
-        <div class="first-run__actions">
-          <button type="submit" class="btn btn--primary">Save and start</button>
-          <button type="button" class="btn btn--ghost" onClick={handleSkip}>Skip (use defaults)</button>
-        </div>
-      </form>
+          <div class="fr-privacy">
+            <span>🔒</span>
+            <span>Saved only in this browser. Read-only: we never click, buy or fill in forms.</span>
+          </div>
+
+          <button type="submit" class="fr-btn-primary">
+            {isSetup ? "Start using Small Print" : "Save settings"}
+          </button>
+          <button type="button" class="fr-btn-ghost" onClick={handleSkip}>
+            {isSetup ? "Skip, use defaults" : "Cancel"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
