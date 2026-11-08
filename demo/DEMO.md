@@ -7,13 +7,19 @@ Checked with the harness on 2026-11-08 (all reached a correct state; first-visit
 | # | Page | What it shows | Found (first visit) |
 |---|---|---|---|
 | 1 | https://www.audible.co.uk/ep/whats-audible | Cost over time: £0.99/mo for 3 months, then £5.99/mo; lock-in with quotes | cost, lock-in, small print (16 s) |
-| 2 | https://www.amazon.co.uk/dp/B09X7FXHVJ | Amazon product (DeLonghi grinder): returns window "within 30 days of receipt"; cost and lock-in "don't apply" (PR #78) | small print (needs #78 merged; before it, the cost card shows the price as a wrong monthly fee) |
+| 2 | https://www.amazon.co.uk/dp/B09X7FXHVJ | Amazon product (now a **SanDisk 128GB SD card**; on 2026-11-08 Amazon moved this ID from the DeLonghi grinder): returns window "30 days", quoted from Amazon's conditions of use; cost and lock-in "don't apply" | small print (needs the returns-window fix merged; before it, the returns window shows "for free" or "in new and unused condition") |
 | 3 | https://www.vodafone.co.uk/mobile/best-sim-only-deals | Who's behind it: Vodafone → Companies House 01833679, modern slavery statement, ASA rulings | company, cost, lock-in, small print (27 s; pre-warm it) |
 | 4 | https://www.bbc.co.uk/news/technology | Badge greys out; one card: "No purchase detected on this page" | n/a (0.1 s) |
 
 Backups: Spotify Premium https://www.spotify.com/gb/premium/ (cost, lock-in in 8 s); Amazon Philips Hue kit https://www.amazon.co.uk/dp/B09F72J3SG.
 
-Check on screen before recording: Amazon's "Seller" row is quoted from "Credit broker: Amazon EU S.A.R.L.", which doesn't show who sells the item. Don't point at it. Leave Currys out of the demo (it shows a finance offer as a monthly fee).
+Check on screen before recording. Don't point at these rows: they have a verbatim quote, but the value is wrong or weak (harness run 2026-11-08):
+
+- Amazon "Seller": "Amazon Europe Core SARL", quoted from "This website is owned and maintained by…". It names the website owner, not who sells the item.
+- Audible "Seller: Audible" (quoted from "Audible uses cookies."), "Exit fee: Cancel monthly" and "Auto-renews: Yes" (quoted from the promo banner).
+- Vodafone "Auto-renews": quoted from the pay-as-you-go bundle terms, not the SIM-only plan.
+
+Leave Currys out of the demo (it shows a finance offer as a monthly fee).
 
 Not for the demo: Tesco Clubcard Plus is detected, but the page calls its brand "Clubcard Plus", so the company card correctly shows no match (no fuzzy matching). Tesco grocery product pages answer HTTP 403 to automated browsers.
 
@@ -25,7 +31,7 @@ Record the browser window only, at 1080p, with the side panel open. Use a fresh 
 2. **0:10 – Install and first run (15 s).** Show the extension pinned. Open page 1, click the icon. The first-run form asks only for horizon and values. Press **Skip**.
 3. **0:25 – Lifetime cost (30 s).** Page 1. Cards stream in. Point at the 12-month total, then switch the horizon to 24 months. Open one quote and its source link: "Every number has a verbatim quote, and the code checks the quote is in the source before it shows it."
 4. **0:55 – Lock-in and small print (25 s).** Same page: the lock-in terms it found (auto-renewal, how to cancel, notice), each with its quote. Rows it didn't find are not shown; never fill them in by voice.
-5. **1:20 – Product (15 s).** Page 2. The returns window with its quote. Cost and lock-in say they don't apply to a one-off product: "It doesn't invent a monthly fee for a coffee grinder."
+5. **1:20 – Product (15 s).** Page 2. The returns window with its quote. Cost and lock-in say they don't apply to a one-off product: "It doesn't invent a monthly fee for a memory card."
 6. **1:35 – Who's behind it (20 s).** Page 3. Vodafone → Companies House 01833679 → records with dates and source links. Say "recorded" and "published", never a verdict.
 7. **1:55 – Not a purchase (5 s).** Page 4. The badge greys out and one card says no purchase was detected.
 8. **2:00 – Close.** "Evidence, not verdicts."
