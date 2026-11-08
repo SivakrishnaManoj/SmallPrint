@@ -5,6 +5,7 @@ import type { AnalyseResult, CardName, Settings, StreamCard } from "~panel/types
 import { DEFAULT_SETTINGS } from "~panel/types";
 import { ItemCard } from "~panel/components/ItemCard";
 import { CostCard } from "~panel/components/CostCard";
+import { StatutoryRights } from "~panel/components/StatutoryRights";
 import { PriceDriftCard } from "~panel/components/PriceDriftCard";
 import { LockInCard } from "~panel/components/LockInCard";
 import { SmallPrintCard } from "~panel/components/SmallPrintCard";
@@ -35,13 +36,13 @@ class CardErrorBoundary extends Component<{ name: string; children: ComponentChi
   }
 }
 
-function renderCard(c: StreamCard, settings: Settings, purchaseTypes: string[]) {
+function renderCard(c: StreamCard, settings: Settings, purchaseTypes: string[], lockIn?: AnalyseResult["lock_in"]) {
   const p = c.payload as never;
   switch (c.card as CardName) {
     case "item":
       return <ItemCard item={p as Partial<AnalyseResult["item"]>} state={c.state} purchaseTypes={purchaseTypes} />;
     case "cost":
-      return <CostCard costStreams={(c.payload as { cost_streams?: AnalyseResult["cost_streams"] }).cost_streams ?? []} state={c.state} horizon={settings.horizon} />;
+      return <CostCard costStreams={(c.payload as { cost_streams?: AnalyseResult["cost_streams"] }).cost_streams ?? []} state={c.state} horizon={settings.horizon} lockIn={lockIn} />;
     case "price_drift":
       return <PriceDriftCard priceDrift={p} state={c.state} />;
     case "lock_in":
@@ -181,6 +182,7 @@ export function App() {
   const noPurchase = cards.find((c) => c.card === "item")?.state === "n_a";
   const visible = noPurchase ? cards.filter((c) => c.card === "item") : cards;
   const purchaseTypes = request?.purchase_type_signals ?? [];
+  const lockInCard = cards.find((c) => c.card === "lock_in");
 
   return (
     <div class="panel">
@@ -213,10 +215,13 @@ export function App() {
       <div class="cards" aria-live="polite" aria-busy={status === "streaming"}>
         {visible.map((c) => (
           <CardErrorBoundary key={c.card} name={c.card}>
-            {renderCard(c, settings, purchaseTypes)}
+            {renderCard(c, settings, purchaseTypes, lockInCard?.state === "found" || lockInCard?.state === "estimated" ? (lockInCard.payload as AnalyseResult["lock_in"]) : undefined)}
           </CardErrorBoundary>
         ))}
       </div>
+
+      {/* The law, not the seller's terms: shown apart from the evidence cards, once there's a purchase. */}
+      {!noPurchase && visible.length > 0 && <StatutoryRights purchaseTypes={purchaseTypes} />}
 
       {status === "streaming" && (
         <div class="sp-progress" data-testid="progress">

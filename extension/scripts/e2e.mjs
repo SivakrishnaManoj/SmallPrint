@@ -140,6 +140,23 @@ try {
   check((await page.getByRole("alert").count()) === 0, "no error banner");
   if (shots) await page.screenshot({ path: join(shots, "done.png"), fullPage: true });
 
+  // W5: switching horizon updates the total instantly; every found value has a quote and link.
+  const totalText = () => page.getByTestId("cost-total").innerText();
+  const before = await totalText();
+  const t1 = Date.now();
+  await page.getByRole("button", { name: "24 months" }).click();
+  const after = await totalText();
+  check(before.includes("12 months") && after.includes("24 months") && before !== after,
+    `horizon switch updates the total (${before.split(":")[1]?.trim()} → ${after.split(":")[1]?.trim()}, ${Date.now() - t1}ms)`);
+  await page.getByRole("button", { name: "12 months" }).click();
+  const rows = page.locator('[data-testid="cost-stream"], [data-testid="lock-in-row"], [data-testid="small-print-row"]');
+  const n = await rows.count();
+  const complete = await rows.evaluateAll((els) =>
+    els.filter((el) => el.querySelector("blockquote")?.textContent.trim() && el.querySelector("a.source-link")?.href.startsWith("https://")).length);
+  check(n > 0 && complete === n, `every found value shows its quote and link (${complete}/${n})`);
+  check(await page.getByTestId("statutory-rights").getByText("Not legal advice", { exact: true }).isVisible(), "statutory rights shown separately, labelled not legal advice");
+  if (shots) await page.screenshot({ path: join(shots, "w5-cards.png"), fullPage: true });
+
   // What actually left the browser.
   const analyse = trace.filter((r) => r.url().endsWith("/analyse") && r.method() === "POST");
   check(analyse.length >= 1, `captured ${analyse.length} POST /analyse request(s)`);
