@@ -103,6 +103,10 @@ async def browse_for_refill(
         if hit is not None:
             return hit.get("stream")
 
+<<<<<<< Updated upstream
+=======
+    # Step 1: fetch the product page and find refill links from it.
+>>>>>>> Stashed changes
     product_html = await _fetch_html(http, page_url)
     if not product_html:
         return None
@@ -115,6 +119,10 @@ async def browse_for_refill(
             cache.put_refill(cache_key, {"stream": None})
         return None
 
+<<<<<<< Updated upstream
+=======
+    # Step 2: fetch each candidate and try extraction with the same Haiku + quote verifier.
+>>>>>>> Stashed changes
     product_label = f"Product: {brand} {name or ''}".strip()
     complete = True
     for url in links[:MAX_PAGES]:
