@@ -189,11 +189,16 @@ async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncAn
     ]
 
 
-async def company_source(request: AnalyseRequest) -> list[Card]:
+def get_company_lookup():
+    """Return the company_lookup callable. Tests monkeypatch this to inject a fast stub."""
     from smallprint.company import company_lookup
+    return company_lookup
+
+
+async def company_source(request: AnalyseRequest) -> list[Card]:
     brand = request.item.brand or request.item.name or ""
     domain = request.item.url or ""
-    result = await company_lookup(brand, domain)
+    result = await get_company_lookup()(brand, domain)
     state = "found" if result.get("ch_number") else "not_found"
     return [("company", state, result)]
 

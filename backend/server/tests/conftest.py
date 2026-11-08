@@ -3,8 +3,13 @@ from __future__ import annotations
 
 import pytest
 
-from server import main
+from server import main, pipeline
 from smallprint.tc_cache import TermsCache
+
+
+async def _fast_company_stub(brand: str, domain: str, **_) -> dict:
+    return {"brand": brand, "parent": None, "ch_number": None,
+            "match_via": "Brand not identified", "records": []}
 
 
 @pytest.fixture(autouse=True)
@@ -32,3 +37,5 @@ def mock_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     # A fresh T&C cache per test, so one test's extraction never serves another.
     fresh = TermsCache()
     monkeypatch.setattr(main, "get_cache", lambda: fresh)
+    # Company lookup makes live HTTP calls; stub it out so tests stay fast and offline.
+    monkeypatch.setattr(pipeline, "get_company_lookup", lambda: _fast_company_stub)
