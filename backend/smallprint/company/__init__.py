@@ -8,7 +8,9 @@ Chain (each step only runs if the previous found nothing):
      Companies House company ID (P2622), parent organisation (P749), a single
      current owner (P127) or a single manufacturer (P176, how product brands
      such as Pepsi Max are linked), official website (P856) and LEI (P1278).
-     When several items share the name, the one whose website matches the page
+     Items whose English label is the brand are considered before items that
+     only have it as an alias ("Pepsi" the drink before the payments company
+     once code-named PEPSI).  When several items share the name, the one whose website matches the page
      domain wins; otherwise the match must be unambiguous (one item with its own
      CH number, or a lone item with an official website).  Never a guess.
      We never look *down* to a subsidiary: being a group's only UK-registered
@@ -220,16 +222,22 @@ async def _wikidata_lookup(
         )
         resp.raise_for_status()
         wanted = brand.casefold()
-        ids = []
+        ids, label_ids = [], set()
         for hit in resp.json().get("search") or []:
             text = ((hit.get("match") or {}).get("text") or hit.get("label") or "")
             if text.strip().casefold() == wanted and hit.get("id"):
                 ids.append(hit["id"])
+                if (hit.get("label") or "").strip().casefold() == wanted:
+                    label_ids.add(hit["id"])
         if not ids:
             return None, None, None, None
 
         entities = await _wd_entities(http, ids)
-        qid = _pick_candidate(entities, domain)
+        # The brand's own name beats a nickname: try label matches first, then everything.
+        by_label = {q: e for q, e in entities.items() if q in label_ids}
+        qid = _pick_candidate(by_label, domain) if by_label else None
+        if qid is None:
+            qid = _pick_candidate(entities, domain)
         if qid is None:
             return None, None, None, None
 
