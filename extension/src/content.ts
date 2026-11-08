@@ -7,7 +7,6 @@ import { detectPurchase } from "./detect";
 import { isCheckout } from "./detect/checkout";
 import { computeDrift, extractCheckoutFees, extractCheckoutSubtotal } from "./priceDrift";
 import type { DetectionMessage, PriceDriftMessage } from "./messages";
-import { priceDriftKey } from "./priceDrift";
 
 let last = "";
 
