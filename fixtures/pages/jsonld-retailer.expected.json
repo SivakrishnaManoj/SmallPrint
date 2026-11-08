@@ -44,14 +44,14 @@
         }
       ],
       "page_text_snippets": [
-        "Was £129.00. Save £30.00. Price valid until 17 November.",
-        "Standard delivery £4.99, free on orders over £40.",
-        "Add a 3-year care plan for £29.99, or £1.99 a month. Care plan terms",
+        "Was \u00a3129.00. Save \u00a330.00. Price valid until 17 November.",
+        "Standard delivery \u00a34.99, free on orders over \u00a340.",
+        "Add a 3-year care plan for \u00a329.99, or \u00a31.99 a month. Care plan terms",
         "2 year manufacturer guarantee included. Guarantee details"
       ],
       "price_drift": {
         "first_seen": null,
-        "current": 99
+        "current": null
       }
     }
   }

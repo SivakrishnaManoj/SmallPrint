@@ -9,7 +9,7 @@
 //   npm run build && npm run e2e            (backend on http://localhost:8000)
 //   SERVER_URL=https://... npm run e2e
 import { createRequire } from "node:module";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -32,6 +32,20 @@ const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "s
   args: [`--disable-extensions-except=${dist}`, `--load-extension=${dist}`],
   viewport: { width: 400, height: 900 },
 });
+// Nothing reaches the real internet: unknown outside URLs get 404. The backend passes through.
+// (Playwright tries the most recently added route first, so this catch-all goes in first.)
+// Local addresses (the backend, the deliberately unreachable test server) are left alone.
+await ctx.route(/^https?:\/\/(?!localhost[:/]|127\.0\.0\.1[:/])/, (route) => route.fulfill({ status: 404, body: "not in test" }));
+// W4: the checkout page's T&C links. The terms page and the contract summary PDF are served;
+// the cancellation page is "blocked" with a 403, which must come back as fetch_failed.
+const TERMS = {
+  html: "https://www.fernline.co.uk/legal/terms-and-conditions",
+  pdf: "https://www.fernline.co.uk/docs/contract-summary-full-fibre-500.pdf",
+  blocked: "https://www.fernline.co.uk/legal/cancellation-rights",
+};
+await ctx.route(TERMS.html, (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: readFileSync(`${pagesDir}/terms/fernline-terms.html`) }));
+await ctx.route(TERMS.pdf, (r) => r.fulfill({ contentType: "application/pdf", body: readFileSync(`${pagesDir}/terms/fernline-contract-summary.pdf`) }));
+await ctx.route(TERMS.blocked, (r) => r.fulfill({ status: 403, body: "Forbidden" }));
 // Serve the saved pages at their real URLs.
 for (const [file, url] of Object.values(PAGES)) {
   await ctx.route(url, (route) => route.fulfill({ contentType: "text/html", body: readFileSync(`${pagesDir}/${file}.html`, "utf8") }));
@@ -143,7 +157,8 @@ try {
       `only non-standard header is X-Install-Id = the stored UUID (custom: ${custom.join(", ")})`);
     check(!("cookie" in headers) && !("referer" in headers), "no cookie or referer sent");
     const body = r.postDataJSON();
-    check(Object.keys(body).sort().join() === "item,links,page_text_snippets,price_drift,purchase_type_signals" &&
+    check(["item,links,page_text_snippets,price_drift,purchase_type_signals", "item,links,page_text_snippets,price_drift,purchase_type_signals,terms"]
+      .includes(Object.keys(body).sort().join()) &&
       !/install_id|postcode|horizon|recordKinds|political_donations/.test(JSON.stringify(body)),
       `body is page data only (keys: ${Object.keys(body).join(", ")})`);
     check(body.item.id === "B09ABC1234" && body.item.name.startsWith("SodaStream Terra"), `body carries the detected item (${body.item.name})`);
@@ -160,6 +175,27 @@ try {
   await page.locator(".card__title").first().waitFor();
   const horizon = await page.evaluate(() => chrome.storage.local.get("smallprint_settings").then((r) => r.smallprint_settings.horizon));
   check(horizon === 24, "changed horizon saved to chrome.storage.local");
+
+  // W4: on the checkout page, the panel fetches its T&C links and sends them with the request.
+  const tcTrace = [];
+  const onReq = (r) => { if (r.url() === `${server}/analyse` && r.method() === "POST") tcTrace.push(r); };
+  ctx.on("request", onReq);
+  const tc = await open(server, checkout.tabId);
+  await tc.locator(".card__title").first().waitFor({ timeout: 20000 });
+  await tc.getByTestId("progress").waitFor({ state: "detached", timeout: 20000 });
+  ctx.off("request", onReq);
+  const tcBody = tcTrace.at(-1)?.postDataJSON();
+  const terms = tcBody?.terms ?? [];
+  const byUrl = Object.fromEntries(terms.map((t) => [t.url, t]));
+  check(typeof byUrl[TERMS.html]?.text === "string" && byUrl[TERMS.html].text.includes("minimum term of 24 months"),
+    "T&C HTML page fetched and sent as text");
+  check(typeof byUrl[TERMS.pdf]?.pdf_b64 === "string" &&
+    Buffer.from(byUrl[TERMS.pdf].pdf_b64, "base64").equals(readFileSync(`${pagesDir}/terms/fernline-contract-summary.pdf`)),
+    "T&C PDF fetched and sent as pdf_b64 (bytes identical)");
+  check(byUrl[TERMS.blocked]?.fetch_failed === true && byUrl[TERMS.blocked]?.error === "HTTP 403" && !("text" in byUrl[TERMS.blocked]),
+    "blocked T&C fetch sets fetch_failed (HTTP 403) for the search fallback");
+  check((await tc.getByRole("alert").count()) === 0, "backend accepted the request with terms (no error)");
+  if (process.env.CAPTURE_DIR && tcBody) writeFileSync(join(process.env.CAPTURE_DIR, "request-with-terms.json"), JSON.stringify(tcBody));
 
   // A page with no purchase: the panel says so and offers the demo.
   const none = await open(server, article.tabId);

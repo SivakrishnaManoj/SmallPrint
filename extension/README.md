@@ -50,6 +50,18 @@ Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpack
 - To use another backend (ngrok, Railway), click **Server** in the panel. The URL is saved in `chrome.storage.local`. You can also build with `VITE_SERVER_URL=https://… npm run build`. Hosts outside `localhost`, `*.ngrok-free.app` and `*.up.railway.app` must be added to `host_permissions` in the manifest.
 - `npm run watch` rebuilds on change. Then click reload on the extension card and reopen the panel.
 
+## T&C fetcher (W4)
+
+Before posting the request, the panel fetches up to 3 of the page's T&C links (`src/terms/fetchTerms.ts`), preferring terms, then contract summary, subscription, cancel, price guide, returns and warranty. It sends them as `terms` (see `contracts/request.schema.json`):
+
+| Fetched | Sent as |
+|---|---|
+| HTML or plain-text page | `{url, kind, text}`; the backend strips the HTML. Pages over 500,000 characters are cut, not dropped. |
+| PDF (by content type, or bytes starting `%PDF-`) | `{url, kind, pdf_b64}`, up to about 15 MB |
+| HTTP error, network error, 10 s timeout, empty, unsupported type, too large | `{url, kind, fetch_failed: true, error}`, so the backend falls back to search |
+
+It's a plain `fetch`: the browser's own User-Agent, no retries with other headers, no bot evasion. Cookies and the referrer aren't sent. The demo request skips fetching, because its links are fixtures. Access to any site comes from the content script's `http(s)://*/*` match patterns, which Chrome treats as host permissions, so no new permission is needed.
+
 ## Saved pages
 
 `fixtures/pages/<name>.html` each has a `<name>.expected.json` beside it, holding the page URL and the reviewed detection. `test/detect.test.ts` checks each page against its expected file, and also covers detector order and that the DOM is left unchanged. The pages are:
@@ -83,7 +95,7 @@ The pages are hand-trimmed copies built on the real DOM structure of each site t
 ## Tests
 
 ```bash
-npm test                                # detection over saved pages + SSE client (vitest, no browser)
+npm test                                # detection over saved pages, T&C fetcher, SSE client (vitest, no browser)
 npm run build && npm run e2e            # loads dist/ in Chromium against a running backend
 ```
 
