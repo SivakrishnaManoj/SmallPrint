@@ -28,6 +28,7 @@ const BADGES: [string, string, string][] = [
   ["found", "found-ink", "found-bg"],
   ["estimated", "estimated-ink", "estimated-bg"],
   ["not found / n/a", "muted-ink", "muted-ink-bg"],
+  ["selected toggle / primary button", "on-accent", "accent"],
 ];
 
 describe("badge contrast (WCAG AA, 4.5:1)", () => {
@@ -45,5 +46,7 @@ describe("badge contrast (WCAG AA, 4.5:1)", () => {
     expect(css).toMatch(/\.badge--estimated\s*{[^}]*color:\s*var\(--estimated-ink\)/);
     expect(css).toMatch(/\.badge--na\s*{[^}]*color:\s*var\(--muted-ink\)/);
     expect(css).not.toMatch(/\.card--n_a\s*{[^}]*opacity/);
+    expect(css).toMatch(/\.toggle\.active\s*{[^}]*color:\s*var\(--on-accent\)/);
+    expect(css).toMatch(/\.btn--primary\s*{[^}]*color:\s*var\(--on-accent\)/);
   });
 });

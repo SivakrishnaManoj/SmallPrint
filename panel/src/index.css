@@ -19,6 +19,8 @@
   --shadow: 0 1px 3px rgba(0,0,0,0.08);
   /* Badge text. The state colours above are for card edges; small text needs 4.5:1 (WCAG AA).
      Measured on each badge background: found 4.79, estimated 4.84, not found / n/a 6.87. */
+  /* Text on the accent colour (selected toggle, primary button). */
+  --on-accent: #ffffff;
   --found-ink: #15803d;
   --estimated-ink: #b45309;
   --muted-ink: #4b5563;
@@ -44,6 +46,7 @@
     --not-found-bg: #1f2937;
     --na-bg: #1f2937;
     /* Dark: found 8.55, estimated 10.92, not found / n/a 7.00. */
+    --on-accent: #111827;
     --found-ink: #4ade80;
     --estimated-ink: #fbbf24;
     --muted-ink: #d1d5db;
@@ -178,12 +181,14 @@ body {
   cursor: pointer;
   border: 1px solid transparent;
   -webkit-tap-highlight-color: transparent;
-  transition-property: scale, background-color, border-color, color;
+  /* Only the press scale animates. Colours change instantly, so a light/dark theme switch never smears
+     (better-ui: "suppress transitions on theme switch"). */
+  transition-property: scale;
   transition-duration: 150ms;
   transition-timing-function: ease-out;
 }
 .btn:not(:disabled):active, .toggle:not(:disabled):active { scale: 0.96; }
-.btn--primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn--primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .btn--primary:disabled { opacity: 0.5; cursor: default; }
 .btn--ghost { background: transparent; color: var(--text); border-color: var(--border); }
 
@@ -199,11 +204,13 @@ body {
   border: 1px solid var(--border);
   color: var(--text);
   -webkit-tap-highlight-color: transparent;
-  transition-property: scale, background-color, border-color, color;
+  /* Only the press scale animates. Colours change instantly, so a light/dark theme switch never smears
+     (better-ui: "suppress transitions on theme switch"). */
+  transition-property: scale;
   transition-duration: 150ms;
   transition-timing-function: ease-out;
 }
-.toggle.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.toggle.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
 /* ---- Text inputs ---- */
 .text-input {
