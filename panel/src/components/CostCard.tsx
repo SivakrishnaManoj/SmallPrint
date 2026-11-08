@@ -115,7 +115,7 @@ export function CostCard({ costStreams, state, horizon, lockIn }: Props) {
           <li key={i} class="cost__stream-item" data-testid="cost-stream">
             <span class="stream__label">{s.label}</span>
             <span class="stream__detail">{streamDetail(s)}</span>
-            <Evidence quote={s.evidence.quote} url={s.evidence.url} />
+            <Evidence quote={s.evidence.quote} url={s.evidence.url} sourceStep={s.evidence.source_step} />
           </li>
         ))}
       </ul>

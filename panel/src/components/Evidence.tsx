@@ -7,7 +7,12 @@ interface Props {
   url?: string | null;
   /** Link text; defaults to the source's domain. */
   label?: string;
+  /** How the backend got the document (`source_step`). Set when it fell back to search. */
+  sourceStep?: string | null;
 }
+
+/** The backend's label for a document it found with web search because the browser couldn't fetch the T&C page. */
+export const SEARCH_SOURCE_STEP = "tavily_search";
 
 export function hasEvidence(quote?: string | null, url?: string | null): boolean {
   return !!quote?.trim() && !!url?.trim();
@@ -21,7 +26,7 @@ export function sourceName(url: string): string {
   }
 }
 
-export function Evidence({ quote, url, label }: Props) {
+export function Evidence({ quote, url, label, sourceStep }: Props) {
   if (!hasEvidence(quote, url)) return null;
   return (
     <div class="evidence">
@@ -29,6 +34,10 @@ export function Evidence({ quote, url, label }: Props) {
       <a href={url!} class="source-link" target="_blank" rel="noopener noreferrer">
         {label ?? sourceName(url!)} ↗
       </a>
+      {/* Story 28: say when the T&C page couldn't be fetched and this came from a web search instead. */}
+      {sourceStep === SEARCH_SOURCE_STEP && (
+        <span class="muted evidence-source-step"> · found by web search, not from the page's own T&C link</span>
+      )}
     </div>
   );
 }

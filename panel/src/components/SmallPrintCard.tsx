@@ -32,7 +32,7 @@ export function SmallPrintCard({ items, state }: Props) {
             <li key={i} class="small-print__item" data-testid="small-print-row">
               <strong>{label(item.field)}</strong>
               {item.value && <span class="small-print__value">{item.value}</span>}
-              <Evidence quote={item.quote} url={item.url} />
+              <Evidence quote={item.quote} url={item.url} sourceStep={item.source_step} />
             </li>
           ))}
         </ul>

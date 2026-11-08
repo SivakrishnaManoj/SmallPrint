@@ -36,7 +36,7 @@ export function LockInCard({ lockIn, state }: Props) {
   const rows = FIELDS.flatMap(({ field, label, show }) => {
     const value = show(lockIn);
     const ev = lockIn.evidence?.find((e) => e.field === field && hasEvidence(e.quote, e.url));
-    return value != null && ev ? [{ field, label, value, quote: ev.quote, url: ev.url }] : [];
+    return value != null && ev ? [{ field, label, value, quote: ev.quote, url: ev.url, sourceStep: ev.source_step }] : [];
   });
 
   return (
@@ -49,7 +49,7 @@ export function LockInCard({ lockIn, state }: Props) {
             <li key={r.field} class="lock-in__item" data-testid="lock-in-row">
               <span class="lock-in__label">{r.label}</span>
               <span class="lock-in__value">{r.value}</span>
-              <Evidence quote={r.quote} url={r.url} />
+              <Evidence quote={r.quote} url={r.url} sourceStep={r.sourceStep} />
             </li>
           ))}
         </ul>

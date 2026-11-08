@@ -43,6 +43,8 @@ export interface LockInEvidence {
   field: LockInField;
   quote: string;
   url: string;
+  /** Set when the quote came from a fallback source, e.g. "tavily_search" (contracts/response.schema.json). */
+  source_step?: string | null;
 }
 
 export interface SmallPrintItem {
