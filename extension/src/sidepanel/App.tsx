@@ -13,6 +13,7 @@ import { FirstRunForm } from "~panel/components/FirstRunForm";
 import { CANNED_REQUEST, DEFAULT_SERVER_URL, TIMEOUTS, type AnalyseBody } from "../config";
 import { useActiveDetection } from "./activeDetection";
 import { streamAnalyse } from "../sse";
+import { fetchTermsDocuments } from "../terms/fetchTerms";
 import { getInstallId } from "../install";
 import { completeSetup, isSetupDone, loadSettings, onSettingsChanged } from "../settings";
 import { loadServerUrl, saveServerUrl } from "./serverUrl";
@@ -61,6 +62,8 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [cards, setCards] = useState<StreamCard[]>([]);
   const [status, setStatus] = useState<Status>("streaming");
+  // While streaming: "terms" = fetching the T&C pages, "cards" = waiting for the server.
+  const [phase, setPhase] = useState<"terms" | "cards">("cards");
   const [error, setError] = useState<string | null>(null);
   const run = useRef<AbortController | null>(null);
   const [demo, setDemo] = useState(false);
@@ -91,7 +94,7 @@ export function App() {
   // Analyse once setup is done, the server URL is known and there's something to analyse;
   // again whenever the page's purchase or the URL changes.
   useEffect(() => {
-    if (serverUrl && setupDone && request) analyse(serverUrl, request);
+    if (serverUrl && setupDone && request) analyse(serverUrl, request, !demo);
     else if (!request) {
       run.current?.abort();
       run.current = null;
@@ -104,9 +107,10 @@ export function App() {
   // Switching to another tab leaves demo mode.
   useEffect(() => setDemo(false), [active?.url]);
 
-  const rerun = () => serverUrl && request && analyse(serverUrl, request);
+  const rerun = () => serverUrl && request && analyse(serverUrl, request, !demo);
 
-  async function analyse(url: string, body: AnalyseBody) {
+  /** `fetchTerms`: fetch the page's T&C links first (W4). Off for the demo request, whose links are fixtures. */
+  async function analyse(url: string, body: AnalyseBody, fetchTerms = true) {
     run.current?.abort();
     const controller = new AbortController();
     run.current = controller;
@@ -115,6 +119,13 @@ export function App() {
     setStatus("streaming");
     try {
       const installId = await getInstallId();
+      if (fetchTerms && !body.terms && body.links.length > 0) {
+        setPhase("terms");
+        const terms = await fetchTermsDocuments(body.links, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (terms.length > 0) body = { ...body, terms };
+      }
+      setPhase("cards");
       for await (const card of streamAnalyse(url, body, { ...TIMEOUTS, installId, signal: controller.signal })) {
         if (controller.signal.aborted) return;
         // Replace a card if the server ever resends it, otherwise append in arrival order.
@@ -210,7 +221,11 @@ export function App() {
       {status === "streaming" && (
         <div class="sp-progress" data-testid="progress">
           <span class="spinner" aria-hidden="true" />
-          <span>{cards.length === 0 ? "Checking the small print…" : `Checking… ${cards.length} of ${TOTAL_CARDS}`}</span>
+          <span>
+            {phase === "terms"
+              ? "Reading the terms…"
+              : cards.length === 0 ? "Checking the small print…" : `Checking… ${cards.length} of ${TOTAL_CARDS}`}
+          </span>
         </div>
       )}
 

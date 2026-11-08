@@ -40,16 +40,16 @@
       ],
       "page_text_snippets": [
         "Monthly membership",
-        "£24.99 a month",
-        "Joining fee £15, paid today",
+        "\u00a324.99 a month",
+        "Joining fee \u00a315, paid today",
         "No long contract. Cancel any time with one month's notice.",
         "Your membership renews automatically each month until you cancel.",
         "Prices may change; we'll give you 30 days' notice.",
-        "Membership terms · How to cancel your membership"
+        "Membership terms \u00b7 How to cancel your membership"
       ],
       "price_drift": {
         "first_seen": null,
-        "current": 24.99
+        "current": null
       }
     }
   }
