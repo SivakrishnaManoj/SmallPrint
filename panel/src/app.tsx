@@ -4,17 +4,15 @@ import type { ComponentChildren } from "preact";
 import { loadSettings } from "./storage";
 import { streamAnalyse } from "./sse";
 import type { Settings, AnalyseRequest, StreamCard, CardState, AnalyseResult } from "./types";
-import { ItemCard } from "./components/ItemCard";
 import { CostCard } from "./components/CostCard";
 import { StatutoryRights } from "./components/StatutoryRights";
-import { PriceDriftCard } from "./components/PriceDriftCard";
-import { LockInCard } from "./components/LockInCard";
-import { SmallPrintCard } from "./components/SmallPrintCard";
+import { TermsAccordion } from "./components/TermsAccordion";
 import { CompanyCard } from "./components/CompanyCard";
 import { FirstRunForm } from "./components/FirstRunForm";
+import { hasEvidence } from "./components/Evidence";
+import { CostModelError, lifetimeCost, type Horizon } from "./cost/lifetimeCost";
 import { SERVER_URL } from "./config";
 
-// Dev harness: load request fixture files at build time
 const REQ_MODULES = import.meta.glob("../../fixtures/requests/*.json", { eager: true });
 const FIXTURE_REQUESTS: Record<string, AnalyseRequest> = {};
 for (const [path, mod] of Object.entries(REQ_MODULES)) {
@@ -35,9 +33,7 @@ type CardData = {
 
 class CardErrorBoundary extends Component<{ name: string; children: ComponentChildren }, { caught: boolean }> {
   state = { caught: false };
-  componentDidCatch() {
-    this.setState({ caught: true });
-  }
+  componentDidCatch() { this.setState({ caught: true }); }
   render() {
     if (this.state.caught) {
       return <div class="card card--error"><p>Not found ({this.props.name})</p></div>;
@@ -59,10 +55,7 @@ export function App() {
   useEffect(() => {
     loadSettings().then((s) => {
       setSettings(s);
-      const seen = (() => {
-        try { return !!localStorage.getItem("smallprint_seen"); }
-        catch { return true; }
-      })();
+      const seen = (() => { try { return !!localStorage.getItem("smallprint_seen"); } catch { return true; } })();
       if (!seen) setFirstRun(true);
     });
   }, []);
@@ -85,22 +78,15 @@ export function App() {
       for await (const event of streamAnalyse(serverUrl, request)) {
         if (event === "done") break;
         const card = event as StreamCard;
-        if (card.card === "item") {
-          setCards((prev: CardData) => ({ ...prev, item: { payload: card.payload as Partial<AnalyseResult["item"]>, state: card.state } }));
-        } else if (card.card === "cost") {
-          setCards((prev: CardData) => ({
-            ...prev,
-            cost: { payload: card.payload as { cost_streams: AnalyseResult["cost_streams"] }, state: card.state },
-          }));
-        } else if (card.card === "price_drift") {
-          setCards((prev: CardData) => ({ ...prev, price_drift: { payload: card.payload as AnalyseResult["price_drift"], state: card.state } }));
-        } else if (card.card === "lock_in") {
-          setCards((prev: CardData) => ({ ...prev, lock_in: { payload: card.payload as AnalyseResult["lock_in"], state: card.state } }));
-        } else if (card.card === "small_print") {
-          setCards((prev: CardData) => ({ ...prev, small_print: { payload: card.payload as AnalyseResult["small_print"], state: card.state } }));
-        } else if (card.card === "company") {
-          setCards((prev: CardData) => ({ ...prev, company: { payload: card.payload as AnalyseResult["company"], state: card.state } }));
-        }
+        setCards((prev: CardData) => {
+          if (card.card === "item") return { ...prev, item: { payload: card.payload as Partial<AnalyseResult["item"]>, state: card.state } };
+          if (card.card === "cost") return { ...prev, cost: { payload: card.payload as { cost_streams: AnalyseResult["cost_streams"] }, state: card.state } };
+          if (card.card === "price_drift") return { ...prev, price_drift: { payload: card.payload as AnalyseResult["price_drift"], state: card.state } };
+          if (card.card === "lock_in") return { ...prev, lock_in: { payload: card.payload as AnalyseResult["lock_in"], state: card.state } };
+          if (card.card === "small_print") return { ...prev, small_print: { payload: card.payload as AnalyseResult["small_print"], state: card.state } };
+          if (card.card === "company") return { ...prev, company: { payload: card.payload as AnalyseResult["company"], state: card.state } };
+          return prev;
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -114,8 +100,61 @@ export function App() {
 
   const noPurchase = cards.item?.state === "n_a";
 
+  // Compute hero stats from available card data
+  const costStreams = cards.cost?.payload?.cost_streams ?? [];
+  const verified = costStreams.filter((s) => hasEvidence(s.evidence?.quote, s.evidence?.url));
+  let heroStats: {
+    total: string;
+    ringPct: number;
+    ringLabel: string;
+    multiplier: string | null;
+    addedAtCheckout: string | null;
+    recordsCount: number;
+    isEstimated: boolean;
+    oneOffTotal: number;
+  } | null = null;
+
+  if (verified.length > 0 && cards.cost) {
+    try {
+      const result = lifetimeCost(verified, settings.horizon as Horizon);
+      if (result.total) {
+        const total = result.total.mid;
+        const oneOffTotal = verified
+          .filter((s) => s.type === "one_off")
+          .reduce((sum, s) => sum + (s.amount ?? 0), 0);
+        const recurringTotal = total - oneOffTotal;
+        const addedTotal = (cards.price_drift?.payload?.added ?? []).reduce((s, a) => s + a.amount, 0);
+        heroStats = {
+          total: `£${total.toFixed(2)}`,
+          ringPct: total > 0 ? Math.round(recurringTotal / total * 100) : 0,
+          ringLabel: cards.lock_in?.payload?.proprietary_refills ? "refills" : "ongoing",
+          multiplier: oneOffTotal > 0 ? `${Math.round(total / oneOffTotal * 10) / 10}×` : null,
+          addedAtCheckout: addedTotal > 0 ? `+£${addedTotal.toFixed(2)}` : null,
+          recordsCount: cards.company?.payload?.records?.length ?? 0,
+          isEstimated: result.state === "estimated",
+          oneOffTotal,
+        };
+      }
+    } catch (err) {
+      if (!(err instanceof CostModelError)) throw err;
+    }
+  }
+
+  const heroName = [
+    cards.item?.payload?.name,
+    purchaseTypes.length > 0 ? (purchaseTypes[0].charAt(0).toUpperCase() + purchaseTypes[0].slice(1)) : null,
+    heroStats && heroStats.oneOffTotal > 0 ? `£${heroStats.oneOffTotal.toFixed(2)}` : null,
+  ].filter(Boolean).join(" · ");
+
+  const lockIn = cards.lock_in?.state === "found" || cards.lock_in?.state === "estimated"
+    ? cards.lock_in.payload : null;
+  const smallPrint = cards.small_print?.state === "found" || cards.small_print?.state === "estimated"
+    ? (cards.small_print.payload ?? []) : [];
+  const hasTerms = lockIn || smallPrint.length > 0;
+
   return (
     <div class="panel">
+      {/* Dev harness */}
       <div class="dev-harness">
         <label class="harness-label">
           Fixture:
@@ -140,53 +179,113 @@ export function App() {
         <button class="btn btn--ghost" onClick={() => setFirstRun(true)}>Settings</button>
       </div>
 
+      {/* Panel header */}
+      <header class="sp-header">
+        <span class="sp-logo">SMALL<b>/</b>PRINT</span>
+        <div class="sp-actions">
+          <button class="btn btn--ghost-on-dark" onClick={() => setFirstRun(true)}>Settings</button>
+        </div>
+      </header>
+
       {error && <p class="error-banner">{error}</p>}
 
-      <div class="cards">
-        {noPurchase && (
-          <ItemCard item={{}} state="n_a" purchaseTypes={[]} />
-        )}
+      {/* No purchase */}
+      {noPurchase && (
+        <div class="sp-body">
+          <p class="empty-state">No purchase detected on this page — try a product, subscription or checkout page.</p>
+        </div>
+      )}
 
-        {!noPurchase && (
-          <>
-            {cards.item && (
-              <CardErrorBoundary name="item">
-                <ItemCard item={cards.item.payload} state={cards.item.state} purchaseTypes={purchaseTypes} />
-              </CardErrorBoundary>
-            )}
+      {/* Results */}
+      {!noPurchase && (
+        <>
+          {/* Hero */}
+          {heroStats ? (
+            <div class="sp-hero">
+              {heroName && <span class="sp-hero__name">{heroName}</span>}
+              <div class="sp-hero__row">
+                {heroStats.ringPct > 0 && (
+                  <div class="sp-ring" style={`--ring-pct: ${heroStats.ringPct}%`}>
+                    <div class="sp-ring__inner">
+                      {heroStats.ringPct}%
+                      <span class="sp-ring__sub">{heroStats.ringLabel}</span>
+                    </div>
+                  </div>
+                )}
+                <div class="sp-stats">
+                  <div class="sp-stat sp-stat--white">
+                    <b>{heroStats.total}</b>
+                    <small>{settings.horizon}-month cost</small>
+                  </div>
+                  {heroStats.multiplier && (
+                    <div class="sp-stat">
+                      <b>{heroStats.multiplier}</b>
+                      <small>the sticker price</small>
+                    </div>
+                  )}
+                  {heroStats.addedAtCheckout && (
+                    <div class="sp-stat sp-stat--red">
+                      <b>{heroStats.addedAtCheckout}</b>
+                      <small>added at checkout</small>
+                    </div>
+                  )}
+                  <div class="sp-stat">
+                    <b>{heroStats.recordsCount}</b>
+                    <small>public records</small>
+                  </div>
+                </div>
+              </div>
+              <div class="sp-hero__sub">
+                {heroStats.isEstimated ? "Estimated at typical use" : "Quoted from source"}
+              </div>
+            </div>
+          ) : streaming ? (
+            <div class="sp-hero">
+              <span class="sp-hero__name" style="opacity:.45">Analysing…</span>
+            </div>
+          ) : null}
+
+          {/* Body */}
+          <div class="sp-body">
             {cards.cost && (
               <CardErrorBoundary name="cost">
-                <CostCard costStreams={cards.cost.payload.cost_streams ?? []} state={cards.cost.state} horizon={settings.horizon} lockIn={cards.lock_in && cards.lock_in.state !== "not_found" && cards.lock_in.state !== "n_a" ? cards.lock_in.payload : undefined} />
+                <CostCard
+                  costStreams={cards.cost.payload.cost_streams ?? []}
+                  state={cards.cost.state}
+                  horizon={settings.horizon}
+                  lockIn={lockIn ?? undefined}
+                  priceDrift={cards.price_drift?.payload}
+                />
               </CardErrorBoundary>
             )}
-            {cards.price_drift && (
-              <CardErrorBoundary name="price_drift">
-                <PriceDriftCard priceDrift={cards.price_drift.payload} state={cards.price_drift.state} />
+
+            {hasTerms && (
+              <CardErrorBoundary name="terms">
+                <TermsAccordion lockIn={lockIn} smallPrint={smallPrint} />
               </CardErrorBoundary>
             )}
-            {cards.lock_in && (
-              <CardErrorBoundary name="lock_in">
-                <LockInCard lockIn={cards.lock_in.payload} state={cards.lock_in.state} />
-              </CardErrorBoundary>
-            )}
-            {cards.small_print && (
-              <CardErrorBoundary name="small_print">
-                <SmallPrintCard items={cards.small_print.payload ?? []} state={cards.small_print.state} />
-              </CardErrorBoundary>
-            )}
+
             {cards.company && (
               <CardErrorBoundary name="company">
-                <CompanyCard company={cards.company.payload} state={cards.company.state} flaggedKinds={settings.recordKinds} />
+                <CompanyCard
+                  company={cards.company.payload}
+                  state={cards.company.state}
+                  flaggedKinds={settings.recordKinds}
+                />
               </CardErrorBoundary>
             )}
-            {cards.item && <StatutoryRights purchaseTypes={purchaseTypes} />}
-          </>
-        )}
 
-        {Object.keys(cards).length === 0 && !streaming && (
-          <p class="empty-state">Select a fixture and click Analyse to see results stream in.</p>
-        )}
-      </div>
+            {Object.keys(cards).length === 0 && !streaming && (
+              <p class="empty-state">Select a fixture and click Analyse to see results stream in.</p>
+            )}
+          </div>
+
+          {/* Statutory rights once results are in */}
+          {!streaming && Object.keys(cards).length > 0 && !noPurchase && (
+            <StatutoryRights purchaseTypes={purchaseTypes} />
+          )}
+        </>
+      )}
     </div>
   );
 }

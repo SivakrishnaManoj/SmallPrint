@@ -1,16 +1,15 @@
 import { Component } from "preact";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { AnalyseResult, CardName, Settings, StreamCard } from "~panel/types";
+import type { AnalyseResult, Settings, StreamCard } from "~panel/types";
 import { DEFAULT_SETTINGS } from "~panel/types";
-import { ItemCard } from "~panel/components/ItemCard";
 import { CostCard } from "~panel/components/CostCard";
 import { StatutoryRights } from "~panel/components/StatutoryRights";
-import { PriceDriftCard } from "~panel/components/PriceDriftCard";
-import { LockInCard } from "~panel/components/LockInCard";
-import { SmallPrintCard } from "~panel/components/SmallPrintCard";
+import { TermsAccordion } from "~panel/components/TermsAccordion";
 import { CompanyCard } from "~panel/components/CompanyCard";
 import { FirstRunForm } from "~panel/components/FirstRunForm";
+import { hasEvidence } from "~panel/components/Evidence";
+import { CostModelError, lifetimeCost, type Horizon } from "~panel/cost/lifetimeCost";
 import { CANNED_REQUEST, DEFAULT_SERVER_URL, TIMEOUTS, type AnalyseBody } from "../config";
 import { useActiveDetection } from "./activeDetection";
 import { streamAnalyse } from "../sse";
@@ -36,42 +35,19 @@ class CardErrorBoundary extends Component<{ name: string; children: ComponentChi
   }
 }
 
-function renderCard(c: StreamCard, settings: Settings, purchaseTypes: string[], lockIn?: AnalyseResult["lock_in"]) {
-  const p = c.payload as never;
-  switch (c.card as CardName) {
-    case "item":
-      return <ItemCard item={p as Partial<AnalyseResult["item"]>} state={c.state} purchaseTypes={purchaseTypes} />;
-    case "cost":
-      return <CostCard costStreams={(c.payload as { cost_streams?: AnalyseResult["cost_streams"] }).cost_streams ?? []} state={c.state} horizon={settings.horizon} lockIn={lockIn} />;
-    case "price_drift":
-      return <PriceDriftCard priceDrift={p} state={c.state} />;
-    case "lock_in":
-      return <LockInCard lockIn={p} state={c.state} />;
-    case "small_print":
-      return <SmallPrintCard items={Array.isArray(c.payload) ? (c.payload as AnalyseResult["small_print"]) : []} state={c.state} />;
-    case "company":
-      return <CompanyCard company={p} state={c.state} flaggedKinds={settings.recordKinds} />;
-  }
-}
-
 export function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [serverUrl, setServerUrl] = useState<string | null>(null);
-  // null = still loading. false = first run not done yet → show the form instead of the cards.
   const [setupDone, setSetupDone] = useState<boolean | null>(null);
   const [editingSettings, setEditingSettings] = useState(false);
   const [cards, setCards] = useState<StreamCard[]>([]);
-  // Starts "done": nothing is loading until there's a purchase to analyse, so a page with
-  // no purchase never flashes the spinner (W7).
   const [status, setStatus] = useState<Status>("done");
-  // While streaming: "terms" = fetching the T&C pages, "cards" = waiting for the server.
   const [phase, setPhase] = useState<"terms" | "cards">("cards");
   const [error, setError] = useState<string | null>(null);
   const run = useRef<AbortController | null>(null);
   const [demo, setDemo] = useState(false);
   const active = useActiveDetection();
 
-  // What to analyse: the active tab's detected purchase, or the canned request in demo mode.
   const request: AnalyseBody | null = demo
     ? CANNED_REQUEST
     : active?.detection.status === "purchase" ? active.detection.request : null;
@@ -82,19 +58,10 @@ export function App() {
     loadSettings().then(setSettings).catch(() => {});
     isSetupDone().then(setSetupDone).catch(() => setSetupDone(false));
     loadServerUrl(DEFAULT_SERVER_URL).then(setServerUrl);
-    // Pick up changes made in the settings tab while the panel is open.
-    const off = onSettingsChanged((s, done) => {
-      setSettings(s);
-      setSetupDone(done);
-    });
-    return () => {
-      off();
-      run.current?.abort();
-    };
+    const off = onSettingsChanged((s, done) => { setSettings(s); setSetupDone(done); });
+    return () => { off(); run.current?.abort(); };
   }, []);
 
-  // Analyse once setup is done, the server URL is known and there's something to analyse;
-  // again whenever the page's purchase or the URL changes.
   useEffect(() => {
     if (serverUrl && setupDone && request) analyse(serverUrl, request, !demo);
     else if (!request) {
@@ -106,12 +73,10 @@ export function App() {
     }
   }, [serverUrl, setupDone, requestKey]);
 
-  // Switching to another tab leaves demo mode.
   useEffect(() => setDemo(false), [active?.url]);
 
   const rerun = () => serverUrl && request && analyse(serverUrl, request, !demo);
 
-  /** `fetchTerms`: fetch the page's T&C links first (W4). Off for the demo request, whose links are fixtures. */
   async function analyse(url: string, body: AnalyseBody, fetchTerms = true) {
     run.current?.abort();
     const controller = new AbortController();
@@ -130,16 +95,14 @@ export function App() {
       setPhase("cards");
       for await (const card of streamAnalyse(url, body, { ...TIMEOUTS, installId, signal: controller.signal })) {
         if (controller.signal.aborted) return;
-        // Replace a card if the server ever resends it, otherwise append in arrival order.
         setCards((prev) => [...prev.filter((c) => c.card !== card.card), card]);
       }
       if (run.current === controller) setStatus("done");
     } catch (err) {
-      if (run.current !== controller) return; // superseded by a newer run
+      if (run.current !== controller) return;
       setError(err instanceof Error ? err.message : String(err));
       setStatus("error");
     } finally {
-      // Never leave the spinner up for a run that is still the current one.
       if (run.current === controller) setStatus((s) => (s === "streaming" ? "done" : s));
     }
   }
@@ -165,12 +128,6 @@ export function App() {
   if (!setupDone || editingSettings) {
     return (
       <div class="panel" data-testid="settings-form">
-        {setupDone && (
-          <header class="sp-header">
-            <h1 class="sp-title">SmallPrint</h1>
-            <button class="btn btn--ghost" onClick={() => setEditingSettings(false)}>Back</button>
-          </header>
-        )}
         <FirstRunForm
           initial={settings}
           title={setupDone ? "Settings" : "Set up SmallPrint"}
@@ -187,18 +144,82 @@ export function App() {
     );
   }
 
-  const noPurchase = cards.find((c) => c.card === "item")?.state === "n_a";
-  const visible = noPurchase ? cards.filter((c) => c.card === "item") : cards;
-  const purchaseTypes = request?.purchase_type_signals ?? [];
+  // Gather cards by name
+  const itemCard = cards.find((c) => c.card === "item");
+  const costCard = cards.find((c) => c.card === "cost");
+  const priceDriftCard = cards.find((c) => c.card === "price_drift");
   const lockInCard = cards.find((c) => c.card === "lock_in");
+  const smallPrintCard = cards.find((c) => c.card === "small_print");
+  const companyCard = cards.find((c) => c.card === "company");
+
+  const noPurchase = itemCard?.state === "n_a";
+  const purchaseTypes = request?.purchase_type_signals ?? [];
+
+  const lockIn = lockInCard?.state === "found" || lockInCard?.state === "estimated"
+    ? (lockInCard.payload as AnalyseResult["lock_in"]) : null;
+  const smallPrint = smallPrintCard?.state === "found" || smallPrintCard?.state === "estimated"
+    ? (Array.isArray(smallPrintCard.payload) ? smallPrintCard.payload as AnalyseResult["small_print"] : []) : [];
+
+  // Compute hero stats
+  const costStreams = costCard ? ((costCard.payload as { cost_streams?: AnalyseResult["cost_streams"] }).cost_streams ?? []) : [];
+  const verifiedStreams = costStreams.filter((s) => hasEvidence(s.evidence?.quote, s.evidence?.url));
+  let heroStats: {
+    total: string;
+    ringPct: number;
+    ringLabel: string;
+    multiplier: string | null;
+    addedAtCheckout: string | null;
+    recordsCount: number;
+    isEstimated: boolean;
+    oneOffTotal: number;
+  } | null = null;
+
+  if (verifiedStreams.length > 0 && costCard) {
+    try {
+      const result = lifetimeCost(verifiedStreams, settings.horizon as Horizon);
+      if (result.total) {
+        const total = result.total.mid;
+        const oneOffTotal = verifiedStreams
+          .filter((s) => s.type === "one_off")
+          .reduce((sum, s) => sum + (s.amount ?? 0), 0);
+        const recurringTotal = total - oneOffTotal;
+        const priceDrift = priceDriftCard ? (priceDriftCard.payload as AnalyseResult["price_drift"]) : null;
+        const addedTotal = (priceDrift?.added ?? []).reduce((s, a) => s + a.amount, 0);
+        const company = companyCard ? (companyCard.payload as AnalyseResult["company"]) : null;
+        heroStats = {
+          total: `£${total.toFixed(2)}`,
+          ringPct: total > 0 ? Math.round(recurringTotal / total * 100) : 0,
+          ringLabel: lockIn?.proprietary_refills ? "refills" : "ongoing",
+          multiplier: oneOffTotal > 0 ? `${Math.round(total / oneOffTotal * 10) / 10}×` : null,
+          addedAtCheckout: addedTotal > 0 ? `+£${addedTotal.toFixed(2)}` : null,
+          recordsCount: company?.records?.length ?? 0,
+          isEstimated: result.state === "estimated",
+          oneOffTotal,
+        };
+      }
+    } catch (err) {
+      if (!(err instanceof CostModelError)) throw err;
+    }
+  }
+
+  const heroName = [
+    (itemCard?.payload as Partial<AnalyseResult["item"]> | undefined)?.name,
+    purchaseTypes.length > 0 ? (purchaseTypes[0].charAt(0).toUpperCase() + purchaseTypes[0].slice(1)) : null,
+    heroStats && heroStats.oneOffTotal > 0 ? `£${heroStats.oneOffTotal.toFixed(2)}` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
     <div class="panel">
+      {/* Panel header */}
       <header class="sp-header">
-        <h1 class="sp-title">SmallPrint</h1>
+        <span class="sp-logo">SMALL<b>/</b>PRINT</span>
         <div class="sp-actions">
-          <button class="btn btn--ghost" onClick={() => setEditingSettings(true)}>Settings</button>
-          <button class="btn btn--primary" onClick={rerun} disabled={status === "streaming" || !serverUrl || !request}>
+          <button class="btn btn--ghost-on-dark" onClick={() => setEditingSettings(true)}>Settings</button>
+          <button
+            class="btn btn--primary"
+            onClick={rerun}
+            disabled={status === "streaming" || !serverUrl || !request}
+          >
             Re-run
           </button>
         </div>
@@ -211,53 +232,134 @@ export function App() {
         </div>
       )}
 
-      <div class="cards" aria-live="polite" aria-busy={status === "streaming"}>
-        {visible.map((c) => (
-          <CardErrorBoundary key={c.card} name={c.card}>
-            {renderCard(c, settings, purchaseTypes, lockInCard?.state === "found" || lockInCard?.state === "estimated" ? (lockInCard.payload as AnalyseResult["lock_in"]) : undefined)}
-          </CardErrorBoundary>
-        ))}
-      </div>
-
-      {/* Progress sits right under the last card, followed by quiet placeholders for the cards still
-          to come, so the page doesn't jump as each one arrives. */}
-      {status === "streaming" && request && (
-        <>
-          <div class="sp-progress" data-testid="progress">
-            <span class="spinner" aria-hidden="true" />
-            <span>
-              {phase === "terms"
-                ? "Reading the terms…"
-                : cards.length === 0 ? "Checking the small print…" : `Checking… ${cards.length} of ${TOTAL_CARDS}`}
-            </span>
-          </div>
-          <div aria-hidden="true">
-            {Array.from({ length: Math.max(0, TOTAL_CARDS - cards.length) }, (_, i) => (
-              <div key={i} class="sp-placeholder" data-testid="placeholder">
-                <span class="sp-placeholder__line sp-placeholder__line--short" />
-                <span class="sp-placeholder__line" />
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* The law, not the seller's terms: shown apart from the evidence cards, once all the cards are in. */}
-      {status !== "streaming" && !noPurchase && visible.length > 0 && <StatutoryRights purchaseTypes={purchaseTypes} />}
-
-      {noPurchasePage && (
-        <div class="cards" data-testid="no-purchase">
-          <ItemCard item={{}} state="n_a" purchaseTypes={[]} />
-          {/* W7: one card only. The demo request is a developer aid, so it's left out of release builds. */}
-          {import.meta.env.DEV && (
+      {/* No purchase — before analysis (no request) or after analysis (item = n_a) */}
+      {(noPurchasePage || noPurchase) && (
+        <div class="sp-body" data-testid="no-purchase">
+          <p class="empty-state">No purchase detected on this page — try a product, subscription or checkout page.</p>
+          {noPurchasePage && import.meta.env.DEV && (
             <p class="sp-footnote">
               <button class="btn btn--ghost" onClick={() => setDemo(true)}>Try the demo purchase</button>
             </p>
           )}
         </div>
       )}
+
+      {/* Results */}
+      {!noPurchasePage && !noPurchase && (
+        <>
+          {/* Hero */}
+          {heroStats ? (
+            <div class="sp-hero">
+              {heroName && <span class="sp-hero__name">{heroName}</span>}
+              <div class="sp-hero__row">
+                {heroStats.ringPct > 0 && (
+                  <div class="sp-ring" style={`--ring-pct: ${heroStats.ringPct}%`}>
+                    <div class="sp-ring__inner">
+                      {heroStats.ringPct}%
+                      <span class="sp-ring__sub">{heroStats.ringLabel}</span>
+                    </div>
+                  </div>
+                )}
+                <div class="sp-stats">
+                  <div class="sp-stat sp-stat--white">
+                    <b>{heroStats.total}</b>
+                    <small>{settings.horizon}-month cost</small>
+                  </div>
+                  {heroStats.multiplier && (
+                    <div class="sp-stat">
+                      <b>{heroStats.multiplier}</b>
+                      <small>the sticker price</small>
+                    </div>
+                  )}
+                  {heroStats.addedAtCheckout && (
+                    <div class="sp-stat sp-stat--red">
+                      <b>{heroStats.addedAtCheckout}</b>
+                      <small>added at checkout</small>
+                    </div>
+                  )}
+                  <div class="sp-stat">
+                    <b>{heroStats.recordsCount}</b>
+                    <small>public records</small>
+                  </div>
+                </div>
+              </div>
+              <div class="sp-hero__sub">
+                {heroStats.isEstimated ? "Estimated at typical use" : "Quoted from source"}
+              </div>
+            </div>
+          ) : status === "streaming" && cards.length === 0 ? (
+            <div class="sp-hero">
+              <span class="sp-hero__name" style="opacity:.45">
+                {phase === "terms" ? "Reading the terms…" : "Checking the small print…"}
+              </span>
+            </div>
+          ) : null}
+
+          {/* Body */}
+          <div class="sp-body">
+            {costCard && (
+              <CardErrorBoundary name="cost">
+                <CostCard
+                  costStreams={costStreams}
+                  state={costCard.state}
+                  horizon={settings.horizon}
+                  lockIn={lockIn ?? undefined}
+                  priceDrift={priceDriftCard ? (priceDriftCard.payload as AnalyseResult["price_drift"]) : undefined}
+                />
+              </CardErrorBoundary>
+            )}
+
+            {(lockIn || smallPrint.length > 0) && (
+              <CardErrorBoundary name="terms">
+                <TermsAccordion lockIn={lockIn} smallPrint={smallPrint} />
+              </CardErrorBoundary>
+            )}
+
+            {companyCard && (
+              <CardErrorBoundary name="company">
+                <CompanyCard
+                  company={companyCard.payload as AnalyseResult["company"]}
+                  state={companyCard.state}
+                  flaggedKinds={settings.recordKinds}
+                />
+              </CardErrorBoundary>
+            )}
+          </div>
+
+          {/* Progress */}
+          {status === "streaming" && request && (
+            <>
+              <div class="sp-progress" data-testid="progress">
+                <span class="spinner" aria-hidden="true" />
+                <span>
+                  {phase === "terms"
+                    ? "Reading the terms…"
+                    : cards.length === 0 ? "Checking the small print…" : `Checking… ${cards.length} of ${TOTAL_CARDS}`}
+                </span>
+              </div>
+              <div aria-hidden="true">
+                {Array.from({ length: Math.max(0, TOTAL_CARDS - cards.length) }, (_, i) => (
+                  <div key={i} class="sp-placeholder" data-testid="placeholder">
+                    <span class="sp-placeholder__line sp-placeholder__line--short" />
+                    <span class="sp-placeholder__line" />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Statutory rights */}
+          {status !== "streaming" && !noPurchase && cards.length > 0 && (
+            <StatutoryRights purchaseTypes={purchaseTypes} />
+          )}
+
+          {request && status === "done" && cards.length === 0 && (
+            <p class="empty-state">No results came back for this page.</p>
+          )}
+        </>
+      )}
+
       {active === undefined && !demo && <div class="loading">Looking at this page…</div>}
-      {request && status === "done" && cards.length === 0 && <p class="empty-state">No results came back for this page.</p>}
       {demo && <p class="sp-footnote">Demo: analysing a canned request ({CANNED_REQUEST.item.name ?? CANNED_REQUEST.item.url}).</p>}
     </div>
   );

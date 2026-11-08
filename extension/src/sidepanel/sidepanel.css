@@ -1,28 +1,13 @@
 #app { max-width: none; }
 
+/* Extension overrides the panel header to stay sticky */
 .sp-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
-.sp-title { font-size: 16px; font-weight: 700; margin: 0; }
-.sp-actions { display: flex; gap: 6px; }
 
-.sp-settings {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.sp-settings .text-input { flex: 1; min-width: 0; width: auto; }
-
+/* Progress bar */
 .sp-progress {
   display: flex;
   align-items: center;
@@ -30,36 +15,52 @@
   padding: 12px 16px;
   color: var(--text-muted);
   font-size: 13px;
+  background: var(--bg);
 }
 .spinner {
   width: 16px;
   height: 16px;
   flex: none;
   border: 2px solid var(--border);
-  border-top-color: var(--accent);
+  border-top-color: var(--teal);
   border-radius: 50%;
   animation: sp-spin 0.8s linear infinite;
 }
 @keyframes sp-spin { to { transform: rotate(360deg); } }
-/* Reduced motion: no rotation; the spinner breathes in opacity instead (the label still says what's happening). */
 @media (prefers-reduced-motion: reduce) { .spinner { animation: sp-pulse 1.6s ease-in-out infinite; } }
 @keyframes sp-pulse { 50% { opacity: 0.35; } }
 
-/* Placeholders for cards still on their way: static shapes, a gentle pulse only when motion is welcome. */
-.sp-placeholder { padding: 16px; border-bottom: 1px solid var(--border); border-left: 3px solid var(--border); }
+/* Placeholders for cards still on their way */
+.sp-placeholder {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+}
 .sp-placeholder__line { display: block; height: 10px; border-radius: 5px; background: var(--border); margin-top: 10px; }
 .sp-placeholder__line--short { width: 35%; margin-top: 0; }
 @media (prefers-reduced-motion: no-preference) {
   .sp-placeholder__line { animation: sp-pulse 1.6s ease-in-out infinite; }
 }
 
-/* The panel scrolls on its own; never chain the scroll to anything behind it. */
 html { overscroll-behavior: contain; }
-.sp-settings { border-top: 1px solid var(--border); border-bottom: none; margin-top: 8px; }
+
+/* Settings form at bottom */
+.sp-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.sp-settings .text-input { flex: 1; min-width: 0; width: auto; }
 
 .sp-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sp-footnote { padding: 8px 16px; font-size: 12px; color: var(--text-muted); }
 
 @media (prefers-color-scheme: dark) {
-  .error-banner { background: #2a1215; border-color: #7f1d1d; }
+  .error-banner { background: rgba(196,69,54,.15); border-color: rgba(196,69,54,.35); }
 }
