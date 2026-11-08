@@ -80,12 +80,12 @@ def use_llm(monkeypatch, fake: FakeLLM) -> FakeLLM:
     return fake
 
 
-async def stream(body: dict, install: str = INSTALL) -> list[tuple[float, dict | None]]:
+async def stream(body: dict, install: str = INSTALL, headers: dict | None = None) -> list[tuple[float, dict | None]]:
     """POST /analyse; return [(seconds since start, card event or None for done)]."""
     events: list[tuple[float, dict | None]] = []
     start = time.monotonic()
     async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as c:
-        async with c.stream("POST", "/analyse", json=body, headers={"X-Install-Id": install}) as resp:
+        async with c.stream("POST", "/analyse", json=body, headers={"X-Install-Id": install, **(headers or {})}) as resp:
             assert resp.status_code == 200
             name = None
             async for line in resp.aiter_lines():
@@ -292,3 +292,24 @@ async def test_cost_and_lock_in_kept_unless_the_page_is_only_a_product(monkeypat
     by_card = cards(await stream({**REQUEST, "purchase_type_signals": signals}))
     assert by_card["cost"]["state"] == "found"
     assert by_card["lock_in"]["state"] == "found"
+
+
+async def test_a_hanging_company_lookup_still_ends_the_stream_in_time(monkeypatch, tracker):
+    """Wikidata, GLEIF, Companies House and the ASA are live calls. If one of them stalls, the
+    company card must resolve as not_found and `done` must still arrive well inside the panel's
+    60 s cap, rather than the stream waiting on it."""
+    use_llm(monkeypatch, FakeLLM())
+
+    async def stalls(brand, domain, **_):
+        await asyncio.sleep(10)
+        return {"brand": brand, "parent": "Late plc", "ch_number": None, "match_via": "Wikidata", "records": []}
+
+    monkeypatch.setattr(pipeline, "get_company_lookup", lambda: stalls)
+    monkeypatch.setattr(pipeline, "COMPANY_TIMEOUT_S", 0.5, raising=False)
+
+    events = await asyncio.wait_for(stream(REQUEST), 5)
+
+    assert events[-1][1] is None, "stream must end with done"
+    by_card = cards(events)
+    assert by_card["company"]["state"] == "not_found"
+    assert by_card["company"]["payload"]["parent"] is None

@@ -115,7 +115,9 @@ def _number_in_quote(value: float | int, quote: str) -> bool:
         forms |= {str(int(value)), f"{int(value)}.00"}
     else:
         forms.add(f"{value:g}")
-    return any(re.search(rf"(?<![\d.]){re.escape(f)}(?![\d])", plain) for f in forms)
+    # Not preceded by a digit or decimal point, and not followed by a digit or by ".<digit>":
+    # 24 must not pass on the "24" in "£24.99" (a price cut short is a wrong price).
+    return any(re.search(rf"(?<![\d.]){re.escape(f)}(?!\d|\.\d)", plain) for f in forms)
 
 
 # "30 days", "28 calendar days", "2-week", "12 months"
@@ -132,9 +134,15 @@ def _is_duration_in_quote(value: str, quote: str) -> bool:
     return bool(m) and _number_in_quote(int(m.group(1)), quote)
 
 
+_NOT_THE_SELLER = ("credit broker", "website is owned", "owned and maintained", "owned and operated")
+
+
 def _names_a_credit_broker(quote: str) -> bool:
-    """Amazon's "Credit broker: Amazon EU S.A.R.L." is the finance offer, not who sells the item."""
-    return "credit broker" in quote.lower()
+    """A company named in a quote that isn't about who sells the item: Amazon's "Credit broker:
+    Amazon EU S.A.R.L." is the finance offer, and "This website is owned and maintained by Amazon
+    Europe Core SARL" is the site owner (both Amazon demo pages, harness run 2026-11-08)."""
+    q = quote.lower()
+    return any(phrase in q for phrase in _NOT_THE_SELLER)
 
 
 def verify_extraction(raw: dict[str, Any], source: str) -> dict[str, dict]:
@@ -303,7 +311,9 @@ def build_cards(found: dict[str, dict], limit_reached: bool = False) -> dict:
     cost_streams: list[dict] = []
     trial_months = found.get("trial_months", {}).get("value")
     trial = found.get("trial_price")
-    has_trial = trial is not None and trial_months
+    # A trial counts only next to the price it turns into: on its own it would make the
+    # lifetime total the trial price over the whole horizon (£0 for a free trial).
+    has_trial = trial is not None and trial_months and "monthly_price" in found
     if has_trial:
         cost_streams.append({"label": "Trial", "type": "recurring", "amount": trial["value"],
                              "from_month": 1, "to_month": trial_months, "evidence": _evidence(trial)})

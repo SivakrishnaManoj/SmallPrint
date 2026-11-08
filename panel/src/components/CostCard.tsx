@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { CardShell } from "./CardShell";
+import { CardShell, LimitReached } from "./CardShell";
 import { Evidence, hasEvidence } from "./Evidence";
 import type { CostStream, CardState, LockIn } from "../types";
 import { CostModelError, lifetimeCost, type Horizon, type LifetimeCost, type Range } from "../cost/lifetimeCost";
@@ -63,6 +63,7 @@ export function CostCard({ costStreams, state, horizon, lockIn }: Props) {
     return <CardShell title="Cost over time" state="n_a"><p class="muted">Cost analysis doesn't apply to this page.</p></CardShell>;
   }
   if (state === "not_found") return <NotFound />;
+  if (state === "limit_reached") return <LimitReached title="Cost over time" what="Costs" />;
 
   // Quote or null: a cost without its quote and link is neither shown nor counted.
   const verified = costStreams.filter((s) => hasEvidence(s.evidence?.quote, s.evidence?.url));
@@ -114,7 +115,7 @@ export function CostCard({ costStreams, state, horizon, lockIn }: Props) {
           <li key={i} class="cost__stream-item" data-testid="cost-stream">
             <span class="stream__label">{s.label}</span>
             <span class="stream__detail">{streamDetail(s)}</span>
-            <Evidence quote={s.evidence.quote} url={s.evidence.url} />
+            <Evidence quote={s.evidence.quote} url={s.evidence.url} sourceStep={s.evidence.source_step} />
           </li>
         ))}
       </ul>

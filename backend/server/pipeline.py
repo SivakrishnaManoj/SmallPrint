@@ -35,6 +35,15 @@ log = logging.getLogger(__name__)
 # Extraction must stream within ~20 s (CLAUDE.md); give up a little after that.
 TERMS_TIMEOUT_S = 25.0
 
+# The company lookup is a chain of live calls (Wikidata, GLEIF, Companies House, ASA), each with
+# its own timeout; together they could outlast the panel's 60 s cap. Target is 5 s; past this the
+# card is not_found and the stream still ends with `done`.
+COMPANY_TIMEOUT_S = 20.0
+
+# The install id of scripts/prewarm.py. The server fetched those T&C pages itself, so their
+# extraction may fill the per-site cache. main.analyse only accepts it with the pre-warm key.
+PREWARM_INSTALL = "prewarm"
+
 
 def refill_enabled() -> bool:
     """Refill cost (S8) is gated: off unless SMALLPRINT_REFILL=1, set only if the H10 gate passes."""
@@ -166,8 +175,13 @@ async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncOp
             found_terms, limit_terms = site_fields, False
         else:
             found_terms, limit_terms = await extract_fields(client, term_docs, install_id, tracker, cache)
-            # Only a complete extraction becomes the site's entry (no refusals, no limit cut-off).
-            if cache and site and term_docs and not limit_terms and all(
+            # Only a complete extraction becomes the site's entry (no refusals, no limit cut-off),
+            # and only from text the server can vouch for: the pre-warm run's own fetches, or
+            # documents the server found itself (search). Text a client sent is served back to
+            # that client only. Otherwise one install could decide what every other install
+            # sees for a site, with quotes that verify against text the real page never had.
+            trusted = install_id == PREWARM_INSTALL or all(d.source for d in term_docs)
+            if cache and site and term_docs and trusted and not limit_terms and all(
                     cache.has_doc(d.url, d.text, d.source) for d in term_docs):
                 cache.put_site(site, found_terms)
 
@@ -227,7 +241,12 @@ def get_company_lookup():
 async def company_source(request: AnalyseRequest) -> list[Card]:
     brand = request.item.brand or request.item.name or ""
     domain = request.item.url or ""
-    result = await get_company_lookup()(brand, domain, manufacturer=request.item.manufacturer)
+    try:
+        result = await asyncio.wait_for(
+            get_company_lookup()(brand, domain, manufacturer=request.item.manufacturer), COMPANY_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        log.warning("company lookup timed out after %ss for brand=%s", COMPANY_TIMEOUT_S, brand)
+        return [("company", "not_found", {**EMPTY_PAYLOAD["company"], "brand": brand})]
     # "found" when we know who's behind it, even if no UK records could be joined: a
     # Companies House match, a known parent, or a record matched on the exact brand or
     # parent name (the ethics datasets carry no CH number, ADR 0002).

@@ -13,8 +13,18 @@ function stateBadge(state: CardState) {
     estimated: { label: "Estimated", cls: "badge badge--estimated" },
     not_found: { label: "Not found", cls: "badge badge--not-found" },
     n_a: { label: "N/A", cls: "badge badge--na" },
+    limit_reached: { label: "Limit reached", cls: "badge badge--na" },
   };
   return map[state] ?? map.not_found;
+}
+
+/** The backend didn't read the terms for this card: the install's daily spend limit was used up. */
+export function LimitReached({ title, what }: { title: string; what: string }) {
+  return (
+    <CardShell title={title} state="limit_reached">
+      <p class="muted">{what} weren't read: this install's daily limit was reached. It resets at midnight UTC.</p>
+    </CardShell>
+  );
 }
 
 export function CardShell({ title, state, children }: Props) {

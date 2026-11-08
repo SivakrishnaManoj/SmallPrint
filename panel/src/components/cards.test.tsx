@@ -135,6 +135,22 @@ describe("small print card", () => {
   });
 });
 
+describe("search fallback (story 28)", () => {
+  const ev = { quote: "The minimum term is 12 months.", url: "https://www.fitbox.example/legal/terms", source_step: "tavily_search" };
+
+  it("a value the backend found by web search says so next to its source link", () => {
+    render(<CostCard costStreams={[{ label: "Monthly fee", type: "recurring", amount: 9.99, evidence: ev }]} state="found" horizon={12} />);
+    render(<LockInCard lockIn={{ min_term_months: 12, evidence: [{ field: "min_term_months", ...ev }] }} state="found" />);
+    render(<SmallPrintCard items={[{ field: "Returns window", value: "30 days", ...ev }]} state="found" />);
+    expect(screen.getAllByText(/found by web search/i)).toHaveLength(3);
+  });
+
+  it("a value from the page's own T&C link carries no such label", () => {
+    render(<LockInCard lockIn={FIXTURES.broadband.lock_in} state="found" />);
+    expect(screen.queryByText(/web search/i)).toBeNull();
+  });
+});
+
 describe("all four card states render", () => {
   const f = FIXTURES.broadband;
   const cards = {
@@ -153,6 +169,17 @@ describe("all four card states render", () => {
       });
     }
   }
+});
+
+describe("limit_reached (contracts/response.schema.json card_state)", () => {
+  it("cost, lock-in and small print say the daily limit was reached, not that nothing was found", () => {
+    render(<CostCard costStreams={[]} state="limit_reached" horizon={12} />);
+    render(<LockInCard lockIn={{ evidence: [] }} state="limit_reached" />);
+    render(<SmallPrintCard items={[]} state="limit_reached" />);
+    expect(screen.getAllByText("Limit reached")).toHaveLength(3);
+    expect(screen.getAllByText(/daily limit/i)).toHaveLength(3);
+    expect(screen.queryAllByText(/wasn't found/)).toHaveLength(0);
+  });
 });
 
 describe("statutory rights", () => {

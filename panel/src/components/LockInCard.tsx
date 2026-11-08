@@ -1,4 +1,4 @@
-import { CardShell } from "./CardShell";
+import { CardShell, LimitReached } from "./CardShell";
 import { Evidence, hasEvidence } from "./Evidence";
 import type { LockIn, LockInField, CardState } from "../types";
 
@@ -30,12 +30,13 @@ export function LockInCard({ lockIn, state }: Props) {
   if (state === "not_found") {
     return <CardShell title="Lock-in" state="not_found"><p>Lock-in information wasn't found for this item.</p></CardShell>;
   }
+  if (state === "limit_reached") return <LimitReached title="Lock-in" what="Lock-in terms" />;
 
   // Quote or null: each value is shown only with its own evidence entry.
   const rows = FIELDS.flatMap(({ field, label, show }) => {
     const value = show(lockIn);
     const ev = lockIn.evidence?.find((e) => e.field === field && hasEvidence(e.quote, e.url));
-    return value != null && ev ? [{ field, label, value, quote: ev.quote, url: ev.url }] : [];
+    return value != null && ev ? [{ field, label, value, quote: ev.quote, url: ev.url, sourceStep: ev.source_step }] : [];
   });
 
   return (
@@ -48,7 +49,7 @@ export function LockInCard({ lockIn, state }: Props) {
             <li key={r.field} class="lock-in__item" data-testid="lock-in-row">
               <span class="lock-in__label">{r.label}</span>
               <span class="lock-in__value">{r.value}</span>
-              <Evidence quote={r.quote} url={r.url} />
+              <Evidence quote={r.quote} url={r.url} sourceStep={r.sourceStep} />
             </li>
           ))}
         </ul>

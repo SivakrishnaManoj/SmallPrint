@@ -83,6 +83,19 @@ async def test_all_card_events_valid_schema(client: AsyncClient) -> None:
                 assert not errors, f"Schema errors on card '{data.get('card')}': {errors[0].message}"
 
 
+def test_mock_mode_never_shows_the_sodastream_fixture_as_found_for_another_product() -> None:
+    """Mock mode (no OPENAI_API_KEY) serves fixtures. Any Amazon URL used to get the SodaStream
+    data as `found`: a wrong product shown with invented figures (V1, #29)."""
+    from server.fixtures import pick_fixture
+
+    other = pick_fixture("https://www.amazon.co.uk/dp/B09F72J3SG", "Philips Hue White Starter Kit")
+    assert other["card_states"]["cost"] != "found"
+    assert not other["cost_streams"]
+    # The SodaStream request fixture still gets its mock.
+    soda = pick_fixture("https://www.amazon.co.uk/dp/B09XXXXXXX", "SodaStream Terra Sparkling Water Maker")
+    assert (soda["item"]["name"] or "").startswith("SodaStream")
+
+
 def test_default_record_kinds_match_data_kinds() -> None:
     """DEFAULT_SETTINGS.recordKinds must use the same ids as the records the backend returns.
 

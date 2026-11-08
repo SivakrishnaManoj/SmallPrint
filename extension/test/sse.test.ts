@@ -68,6 +68,11 @@ describe("streamAnalyse", () => {
     expect(await collect(f)).toEqual(["item"]);
   });
 
+  it("keeps limit_reached cards: the contract's fifth state, sent when the daily spend limit is hit", async () => {
+    const f = fakeFetch([card("item"), card("cost", "limit_reached", { cost_streams: [] }), card("lock_in", "limit_reached", { evidence: [] }), DONE]);
+    expect(await collect(f)).toEqual(["item", "cost", "lock_in"]);
+  });
+
   it("throws ended_early if the stream closes without done", async () => {
     const f = fakeFetch([card("item")]);
     await expect(collect(f)).rejects.toMatchObject({ kind: "ended_early" });

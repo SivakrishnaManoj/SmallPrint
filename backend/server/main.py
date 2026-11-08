@@ -27,7 +27,7 @@ from smallprint.tc_cache import TermsCache, cache as default_cache
 
 from .fixtures import pick_fixture
 from .models import AnalyseRequest, FlagCompanyMatchBody
-from .pipeline import stream_real
+from .pipeline import PREWARM_INSTALL, stream_real
 from .rate_limit import check as rate_check
 
 _llm_client: AsyncOpenAI | None = None
@@ -60,9 +60,6 @@ def get_cache() -> TermsCache:
     return default_cache
 
 
-PREWARM_INSTALL = "prewarm"
-
-
 def is_prewarm(key: str | None) -> bool:
     """True if the request carries the server's pre-warm key (SMALLPRINT_PREWARM_KEY).
 
@@ -81,16 +78,11 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Integration stubs — replace these with real module calls at H6
+# Mock mode sources (no OPENAI_API_KEY). The real pipeline is server/pipeline.py.
 # ---------------------------------------------------------------------------
 
 async def terms_source(request: AnalyseRequest, fixture: dict) -> dict:
-    """Stub: returns cost_streams, lock_in and small_print slices from fixture.
-
-    Real implementation will call:
-        from smallprint.terms import analyse_terms
-        return await analyse_terms(request)
-    """
+    """Mock mode's T&C cards: the fixture's cost_streams, lock_in and small_print slices."""
     return {
         "cost_streams": fixture.get("cost_streams", []),
         "lock_in": fixture.get("lock_in", {}),
@@ -233,6 +225,9 @@ async def analyse(
         # scripts/prewarm.py: its own install id and a higher daily limit, so ~50 sites fit.
         install_id = PREWARM_INSTALL
         tracker.set_limit(PREWARM_INSTALL, float(os.environ.get("SMALLPRINT_PREWARM_LIMIT_USD", "5.00")))
+    elif install_id == PREWARM_INSTALL:
+        # That id carries the higher limit and may fill the shared T&C cache: key holders only.
+        raise HTTPException(status_code=403, detail="X-Install-Id 'prewarm' needs the pre-warm key")
     if not install_id:
         raise HTTPException(status_code=422, detail="Missing X-Install-Id header")
     if not rate_check(install_id):

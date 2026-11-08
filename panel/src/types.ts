@@ -1,4 +1,6 @@
-export type CardState = "found" | "estimated" | "not_found" | "n_a";
+/** contracts/response.schema.json card_state. The four honest states, plus limit_reached: the
+ * backend didn't look because the install's daily spend limit was used up (not "looked, nothing"). */
+export type CardState = "found" | "estimated" | "not_found" | "n_a" | "limit_reached";
 
 export interface Evidence {
   quote?: string | null;
@@ -41,6 +43,8 @@ export interface LockInEvidence {
   field: LockInField;
   quote: string;
   url: string;
+  /** Set when the quote came from a fallback source, e.g. "tavily_search" (contracts/response.schema.json). */
+  source_step?: string | null;
 }
 
 export interface SmallPrintItem {

@@ -20,7 +20,7 @@ On install the extension makes a random UUID (`crypto.randomUUID()`) and stores 
 
 To check it yourself: open the panel, right-click → **Inspect** → **Network**, and select the `/analyse` request.
 
-The side panel POSTs a **canned request** (`fixtures/requests/req_sodastream.json`) to the backend's `/analyse`. It reads the SSE stream and renders each card as it arrives. The card components come from `panel/src` through the `~panel` alias, so the panel workstream stays the single source of the UI. Purchase detection and scraping come later.
+The side panel POSTs the active tab's detected purchase to the backend's `/analyse`, reads the SSE stream and renders each card as it arrives. The card components come from `panel/src` through the `~panel` alias, so the panel workstream stays the single source of the UI. The canned request (`fixtures/requests/req_sodastream.json`) is only offered on non-purchase pages in development builds (`npm run watch`), as a developer aid.
 
 ```
 src/detect/              detectPurchase(url, document): pure, tested over fixtures/pages without a browser
@@ -45,7 +45,7 @@ cd backend && uvicorn server.main:app --port 8000
 cd extension && npm install && npm run build
 ```
 
-Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick `extension/dist`. Click the SmallPrint toolbar icon (pin it from the puzzle-piece menu). The side panel opens, and the six mock cards appear one at a time.
+Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick `extension/dist`. Open a product, subscription or checkout page, click the SmallPrint toolbar icon (pin it from the puzzle-piece menu), and the side panel opens with the six cards appearing one at a time. The backend serves fixtures instead of real analysis when it has no `OPENAI_API_KEY` (mock mode).
 
 - To use another backend (ngrok, Railway), click **Server** in the panel. The URL is saved in `chrome.storage.local`. You can also build with `VITE_SERVER_URL=https://… npm run build`. Hosts outside `localhost`, `*.ngrok-free.app` and `*.up.railway.app` must be added to `host_permissions` in the manifest.
 - `npm run watch` rebuilds on change. Then click reload on the extension card and reopen the panel.

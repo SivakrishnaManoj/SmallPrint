@@ -17,7 +17,7 @@ import pymupdf
 import pytest
 from openai import AsyncOpenAI
 
-from smallprint.extract import Document, analyse_documents, chunk_text, html_to_text, pdf_b64_to_text
+from smallprint.extract import Document, analyse_documents, build_cards, chunk_text, html_to_text, pdf_b64_to_text
 from smallprint.extract.extractor import MAX_INPUT_TOKENS, MODEL, _number_in_quote, verify_extraction
 from smallprint.extract.text import estimate_tokens
 from smallprint.verify import verify_quote
@@ -227,7 +227,8 @@ AMAZON_SRC = (
     "Free returns are available for the shipping address you chose. "
     "For a full refund with no deduction for return shipping, you can return the item for any reason "
     "in new and unused condition. Credit broker: Amazon EU S.A.R.L. "
-    "You can return this item within 30 days of receipt. Sold by Example Retail UK Ltd."
+    "You can return this item within 30 days of receipt. Sold by Example Retail UK Ltd. "
+    "This website is owned and maintained by Amazon Europe Core SARL."
 )
 
 
@@ -241,6 +242,8 @@ AMAZON_SRC = (
                         "quote": "For a full refund with no deduction for return shipping, you can return the item for any reason in new and unused condition."}, False),
     ("returns_window", {"value": "14 days", "quote": "You can return this item within 30 days of receipt."}, False),  # number not in quote
     ("seller", {"value": "Amazon EU S.A.R.L.", "quote": "Credit broker: Amazon EU S.A.R.L."}, False),
+    # The site owner from the footer, not who sells the item (both Amazon demo pages, harness 2026-11-08).
+    ("seller", {"value": "Amazon Europe Core SARL", "quote": "This website is owned and maintained by Amazon Europe Core SARL."}, False),
     ("seller", {"value": "Example Retail UK Ltd", "quote": "Sold by Example Retail UK Ltd."}, True),
     ("seller", {"value": "example retail uk ltd", "quote": "Sold by Example Retail UK Ltd."}, True),
     ("seller", {"value": "Spotify Ltd", "quote": "Sold by Example Retail UK Ltd."}, False),  # name not in the quote
@@ -255,6 +258,23 @@ def test_number_in_quote():
     assert _number_in_quote(20.0, "a fee of £20.00")
     assert not _number_in_quote(30, "one month's notice")
     assert not _number_in_quote(9.99, "£19.99")
+    # A price cut short shares its digits with the real one: 24 is not £24.99.
+    assert not _number_in_quote(24, "costs £24.99 a month")
+    assert not _number_in_quote(5, "£5.99 per month")
+    assert _number_in_quote(5, "a fee of £5. Cancel any time.")
+
+
+def test_a_trial_without_its_full_price_gives_no_cost_total():
+    """A trial stream on its own makes the panel total the trial price over the whole horizon
+    (£0 for a free trial): a wrong number with a verified quote. No full price, no total."""
+    quote = "Free for the first 3 months."
+    found = {
+        "trial_price": {"value": 0, "quote": quote, "url": GYM_URL, "source": None},
+        "trial_months": {"value": 3, "quote": quote, "url": GYM_URL, "source": None},
+    }
+    out = build_cards(found)
+    assert out["cost_streams"] == []
+    assert out["card_states"]["cost"] == "not_found"
 
 
 # --- text handling -------------------------------------------------------

@@ -1,4 +1,4 @@
-import { CardShell } from "./CardShell";
+import { CardShell, LimitReached } from "./CardShell";
 import { Evidence, hasEvidence } from "./Evidence";
 import type { SmallPrintItem, CardState } from "../types";
 
@@ -17,6 +17,7 @@ export function SmallPrintCard({ items, state }: Props) {
   if (state === "not_found") {
     return <CardShell title="Small print" state="not_found"><p>Small print wasn't found for this item.</p></CardShell>;
   }
+  if (state === "limit_reached") return <LimitReached title="Small print" what="Small print clauses" />;
 
   // Quote or null: a clause is shown only with its verbatim quote and link.
   const shown = items.filter((i) => hasEvidence(i.quote, i.url));
@@ -31,7 +32,7 @@ export function SmallPrintCard({ items, state }: Props) {
             <li key={i} class="small-print__item" data-testid="small-print-row">
               <strong>{label(item.field)}</strong>
               {item.value && <span class="small-print__value">{item.value}</span>}
-              <Evidence quote={item.quote} url={item.url} />
+              <Evidence quote={item.quote} url={item.url} sourceStep={item.source_step} />
             </li>
           ))}
         </ul>
