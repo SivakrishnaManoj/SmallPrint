@@ -20,7 +20,6 @@ PRODUCT = {
     "purchase_type_signals": ["product"],
     "links": [],
     "page_text_snippets": [],
-    "price_drift": {"first_seen": None, "current": 59.99},
     "terms": [],
 }
 

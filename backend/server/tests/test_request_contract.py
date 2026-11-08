@@ -17,7 +17,6 @@ _REQ = {
     "purchase_type_signals": ["subscription"],
     "links": [],
     "page_text_snippets": [],
-    "price_drift": {"first_seen": None, "current": 4.99},
     "terms": [
         {"url": "https://help.netflix.com/legal/termsofuse", "text": "You can cancel at any time."},
         {"url": "https://example.com/contract.pdf", "pdf_b64": "JVBERi0xLjQK"},

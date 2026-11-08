@@ -1,7 +1,4 @@
-/**
- * Settings wrapper: chrome.storage.local when available, else localStorage.
- * The postcode is stored locally ONLY and is never included in server requests.
- */
+/** Settings wrapper: chrome.storage.local when available, else localStorage. */
 import type { Settings } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
 
@@ -53,30 +50,3 @@ export async function saveSettings(settings: Settings): Promise<void> {
   }
 }
 
-/** Postcode is local only — never sent to the server. */
-export function savePostcode(postcode: string): void {
-  try {
-    if (hasChromeStorage()) {
-      chrome.storage!.local!.set({ smallprint_postcode: postcode });
-      return;
-    }
-    localStorage.setItem("smallprint_postcode", postcode);
-  } catch {
-    // ignore
-  }
-}
-
-export async function loadPostcode(): Promise<string> {
-  try {
-    if (hasChromeStorage()) {
-      return new Promise((resolve) => {
-        chrome.storage!.local!.get("smallprint_postcode", (r: Record<string, unknown>) => {
-          resolve((r["smallprint_postcode"] as string) ?? "");
-        });
-      });
-    }
-    return localStorage.getItem("smallprint_postcode") ?? "";
-  } catch {
-    return "";
-  }
-}

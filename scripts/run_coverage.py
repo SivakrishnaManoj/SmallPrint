@@ -42,7 +42,6 @@ def build_minimal_request(url: str, install_id: str = "coverage-test-runner") ->
         "purchase_type_signals": [],
         "links": [],
         "page_text_snippets": [],
-        "price_drift": {"first_seen": None, "current": None},
         "install_id": install_id,
     }
 

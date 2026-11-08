@@ -26,9 +26,5 @@
     "Compatible with 60L CO2 cylinders — exchange at participating retailers",
     "Use only SodaStream-approved CO2 cylinders"
   ],
-  "price_drift": {
-    "first_seen": null,
-    "current": 89.99
-  },
   "install_id": "test-install-sodastream-001"
 }

@@ -37,7 +37,6 @@ REQUEST = {
     "purchase_type_signals": ["subscription"],
     "links": [],
     "page_text_snippets": [],
-    "price_drift": {"first_seen": None, "current": 29.99},
     "terms": [{"url": TERMS_URL, "kind": "terms", "text": GYM_TERMS}],
 }
 

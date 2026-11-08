@@ -46,11 +46,7 @@
         "Your membership renews automatically each month until you cancel.",
         "Prices may change; we'll give you 30 days' notice.",
         "Membership terms \u00b7 How to cancel your membership"
-      ],
-      "price_drift": {
-        "first_seen": null,
-        "current": null
-      }
+      ]
     }
   }
 }

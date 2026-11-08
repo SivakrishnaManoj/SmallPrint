@@ -1,1 +1,3 @@
-export const SERVER_URL = "https://df63-192-41-125-255.ngrok-free.app";
+export const SERVER_URL: string =
+  (import.meta as unknown as { env: Record<string, string> }).env.VITE_SERVER_URL ||
+  "http://localhost:8000";

@@ -131,7 +131,7 @@ describe("what leaves the browser", () => {
     expect(sent?.headers).toEqual({ "Content-Type": "application/json", Accept: "text/event-stream", "X-Install-Id": UUID });
     expect(sent?.credentials).toBe("omit");
     const body = JSON.parse(String(sent?.body));
-    expect(Object.keys(body).sort()).toEqual(["item", "links", "page_text_snippets", "price_drift", "purchase_type_signals"]);
+    expect(Object.keys(body).sort()).toEqual(["item", "links", "page_text_snippets", "purchase_type_signals"]);
     expect(JSON.stringify(body)).not.toMatch(/install_id|postcode|horizon|EH1/);
   });
 

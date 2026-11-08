@@ -112,7 +112,6 @@ export function buildBody(req: AnalyseBody): AnalyseBody {
     purchase_type_signals: req.purchase_type_signals,
     links: req.links,
     page_text_snippets: req.page_text_snippets,
-    price_drift: req.price_drift,
     // Optional T&C documents fetched in the browser (contracts/request.schema.json `terms`).
     ...(req.terms ? { terms: req.terms } : {}),
   };

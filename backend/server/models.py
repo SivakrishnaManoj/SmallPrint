@@ -18,11 +18,6 @@ class LinkIn(BaseModel):
     kind: str
 
 
-class PriceDriftIn(BaseModel):
-    first_seen: float | None = None
-    current: float | None = None
-
-
 TermsKind = Literal[
     "terms", "returns", "warranty", "cancel", "subscription",
     "contract_summary", "price_guide", "privacy", "other",
@@ -58,7 +53,6 @@ class AnalyseRequest(BaseModel):
     purchase_type_signals: list[str] = []
     links: list[LinkIn] = []
     page_text_snippets: list[str] = []
-    price_drift: PriceDriftIn = PriceDriftIn()
     terms: list[TermsDocIn] = []
     # Deprecated: send the X-Install-Id header instead. Kept so existing clients work.
     install_id: str | None = None

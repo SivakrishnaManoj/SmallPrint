@@ -26,9 +26,5 @@
     "Stream on 2 devices simultaneously",
     "Membership renews monthly"
   ],
-  "price_drift": {
-    "first_seen": null,
-    "current": 4.99
-  },
   "install_id": "test-install-netflix-001"
 }

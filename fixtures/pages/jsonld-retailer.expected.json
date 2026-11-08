@@ -48,11 +48,7 @@
         "Standard delivery \u00a34.99, free on orders over \u00a340.",
         "Add a 3-year care plan for \u00a329.99, or \u00a31.99 a month. Care plan terms",
         "2 year manufacturer guarantee included. Guarantee details"
-      ],
-      "price_drift": {
-        "first_seen": null,
-        "current": null
-      }
+      ]
     }
   }
 }

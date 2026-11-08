@@ -11,11 +11,9 @@ interface Props {
 }
 
 const RECORD_KIND_OPTIONS = [
-  { id: "political_donations", label: "Political donations" },
+  { id: "donation", label: "Political donations" },
   { id: "gender_pay_gap", label: "Gender pay gap" },
-  { id: "regulator_decisions", label: "Regulator decisions" },
   { id: "modern_slavery", label: "Modern slavery statements" },
-  { id: "b_corp", label: "B Corp certification" },
 ];
 
 export function FirstRunForm({ onComplete, initial = DEFAULT_SETTINGS, title = "Set up Small Print" }: Props) {

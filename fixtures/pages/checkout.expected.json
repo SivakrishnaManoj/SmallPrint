@@ -44,11 +44,7 @@
           "kind": "privacy"
         }
       ],
-      "page_text_snippets": [],
-      "price_drift": {
-        "first_seen": null,
-        "current": null
-      }
+      "page_text_snippets": []
     }
   }
 }

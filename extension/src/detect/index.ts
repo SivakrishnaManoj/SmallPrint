@@ -58,8 +58,6 @@ export function detectPurchase(pageUrl: string, doc: Document): Detection {
         links: findTermsLinks(doc, url),
         // contracts/README.md rule 5: the request never carries checkout page DOM, so no page text from checkouts.
         page_text_snippets: checkout ? [] : pickSnippets(roots, hit.snippets),
-        // shared/request.md: price-drift data must not leave the browser, so both values are null.
-        price_drift: { first_seen: null, current: null },
       },
     };
   }

@@ -67,7 +67,6 @@ def build_request(row: dict, terms: dict) -> dict:
         "purchase_type_signals": [],
         "links": [],
         "page_text_snippets": [],
-        "price_drift": {"first_seen": None, "current": None},
         "terms": [terms],
     }
 

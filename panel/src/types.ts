@@ -119,7 +119,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   horizon: 12,
-  recordKinds: ["political_donations", "gender_pay_gap", "regulator_decisions", "modern_slavery", "b_corp"],
+  recordKinds: ["donation", "gender_pay_gap", "modern_slavery"],
 };
 
 export interface AnalyseRequest {
@@ -136,7 +136,6 @@ export interface AnalyseRequest {
   page_text_snippets: string[];
   /** T&C pages and PDFs fetched in the browser. Optional; a failed fetch is sent with fetch_failed: true. */
   terms?: TermsDocument[];
-  price_drift: { first_seen: number | null; current: number | null };
   /** Deprecated: send the X-Install-Id header instead. */
   install_id?: string;
 }
