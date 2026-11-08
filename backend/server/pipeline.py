@@ -35,6 +35,11 @@ log = logging.getLogger(__name__)
 # Extraction must stream within ~20 s (CLAUDE.md); give up a little after that.
 TERMS_TIMEOUT_S = 25.0
 
+# The company lookup is a chain of live calls (Wikidata, GLEIF, Companies House, ASA), each with
+# its own timeout; together they could outlast the panel's 60 s cap. Target is 5 s; past this the
+# card is not_found and the stream still ends with `done`.
+COMPANY_TIMEOUT_S = 20.0
+
 # The install id of scripts/prewarm.py. The server fetched those T&C pages itself, so their
 # extraction may fill the per-site cache. main.analyse only accepts it with the pre-warm key.
 PREWARM_INSTALL = "prewarm"
@@ -236,7 +241,12 @@ def get_company_lookup():
 async def company_source(request: AnalyseRequest) -> list[Card]:
     brand = request.item.brand or request.item.name or ""
     domain = request.item.url or ""
-    result = await get_company_lookup()(brand, domain, manufacturer=request.item.manufacturer)
+    try:
+        result = await asyncio.wait_for(
+            get_company_lookup()(brand, domain, manufacturer=request.item.manufacturer), COMPANY_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        log.warning("company lookup timed out after %ss for brand=%s", COMPANY_TIMEOUT_S, brand)
+        return [("company", "not_found", {**EMPTY_PAYLOAD["company"], "brand": brand})]
     # "found" when we know who's behind it, even if no UK records could be joined.
     state = "found" if result.get("ch_number") or result.get("parent") else "not_found"
     return [("company", state, result)]
