@@ -28,7 +28,9 @@ def pick_fixture(item_url: str, item_name: str | None) -> dict:
     name_lower = (item_name or "").lower()
     combined = url_lower + " " + name_lower
 
-    if any(k in combined for k in ("amazon", "sodastream", "soda")):
+    # The mock is for the SodaStream request fixture only. Any other Amazon product would
+    # otherwise be shown as "found" with the SodaStream figures (V1, #29).
+    if any(k in combined for k in ("sodastream", "soda")):
         return _get("sodastream")
     if any(k in combined for k in ("netflix",)):
         return _get("netflix")
