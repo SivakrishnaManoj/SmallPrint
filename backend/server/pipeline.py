@@ -49,6 +49,11 @@ def refill_enabled() -> bool:
     """Refill cost (S8) is gated: off unless SMALLPRINT_REFILL=1, set only if the H10 gate passes."""
     return os.environ.get("SMALLPRINT_REFILL", "").strip().lower() in ("1", "true", "on", "yes")
 
+
+def deep_search_enabled() -> bool:
+    """Company deep search (ADR 0003): on unless SMALLPRINT_DEEP_SEARCH is 0/false/off/no."""
+    return os.environ.get("SMALLPRINT_DEEP_SEARCH", "").strip().lower() not in ("0", "false", "off", "no")
+
 Card = tuple[str, str, object]  # (card, state, payload)
 
 TERMS_CARDS = ("cost", "lock_in", "small_print")
@@ -243,7 +248,8 @@ async def company_source(request: AnalyseRequest) -> list[Card]:
     domain = request.item.url or ""
     try:
         result = await asyncio.wait_for(
-            get_company_lookup()(brand, domain, manufacturer=request.item.manufacturer), COMPANY_TIMEOUT_S)
+            get_company_lookup()(brand, domain, manufacturer=request.item.manufacturer,
+                                 deep_search=deep_search_enabled()), COMPANY_TIMEOUT_S)
     except asyncio.TimeoutError:
         log.warning("company lookup timed out after %ss for brand=%s", COMPANY_TIMEOUT_S, brand)
         return [("company", "not_found", {**EMPTY_PAYLOAD["company"], "brand": brand})]
