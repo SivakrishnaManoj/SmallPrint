@@ -10,14 +10,14 @@ Checks run from a clean install (`.venv` with `requirements.txt`, `npm ci` in `e
 
 | Check | Before this branch | After this branch |
 |---|---|---|
-| `pytest` (repo root, `testpaths = backend`) | 351 passed, 1 skipped | 356 passed, 1 skipped |
+| `pytest` (repo root, `testpaths = backend`) | 351 passed, 1 skipped | 357 passed, 1 skipped |
 | `pytest data/` (not in `testpaths`) | 17 passed | 17 passed |
 | `panel/`: `npm test` | 44 passed | 47 passed |
 | `panel/`: `npm run build` (tsc + vite) | ok | ok |
 | `extension/`: `npm test` | 96 passed | 97 passed |
 | `extension/`: `npm run build` (tsc + two vite builds) | ok | ok |
 
-Nothing failed at baseline. The new tests (9) each failed before their fix and pass after it.
+Nothing failed at baseline. The new tests (10) each failed before their fix and pass after it.
 
 ## 2. Story trace
 
@@ -89,7 +89,7 @@ Rated by demo impact. P0: wrong value, hang, or an invariant breach. P1: visible
 | F6 | P1 | **`limit_reached` cards were dropped by the extension.** `sse.ts CARD_STATES` knew four states; the backend sends `limit_reached` for cost, lock-in and small print after the $0.20/day limit (about 55 extraction calls, or one long T&C page, see F11). The cards vanished, placeholders showed "Checking… 3 of 6" until done, no explanation. `panel/src/types.ts CardState` lacked the state too. | `extension/test/sse.test.ts` "keeps limit_reached cards"; `cards.test.tsx` "limit_reached" | fixed (`b54a621`): accepted, typed, rendered with a "Limit reached" badge and a reset note |
 | F7 | P1 | **Story 28 not delivered in the panel.** Values from the search fallback carry `source_step: "tavily_search"` but no card said so. | `cards.test.tsx` "search fallback (story 28)" | fixed (`ff1ad3a`): `Evidence` prints "found by web search, not from the page's own T&C link" |
 | F8 | P2 | **Mock mode served the SodaStream fixture for any Amazon URL** (V1 #29 item, never done). Live is not in mock mode today (see §5), but a missing `OPENAI_API_KEY` after a variable edit would switch it on silently and show invented figures as found. | `test_mock_mode_never_shows_the_sodastream_fixture_as_found_for_another_product` | fixed (`6734b71`): keyword must be the product, not the host |
-| F9 | P2 | **Suspected: price drift never records a first-seen price.** `content.ts` calls `chrome.storage.session.get/set` from the content script. Chrome exposes `storage.session` to content scripts only after `setAccessLevel({accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS"})`, which nothing calls; the rejection is swallowed by `.catch(() => {})`. Cut-list feature (V3); the card shows n_a either way. | Needs Chrome: open a product page, then `chrome.storage.session.get()` from the service worker and look for `pricedrift_firstseen_<host>`. | suspected, open |
+| F9 | P2 | **Confirmed: price drift never records a first-seen price.** `content.ts` calls `chrome.storage.session.get/set` from the content script. Chrome exposes `storage.session` to content scripts only after `setAccessLevel({accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS"})`, which nothing calls; the rejection is swallowed by `.catch(() => {})`. So the price-drift card (V3, cut order 1) can never be anything but n_a. | Headless Chromium with `extension/dist`, the saved Amazon page (price £89.99) served at its URL: after 2.5 s the service worker's `chrome.storage.session.get(null)` holds `detection:<tab>` but no `pricedrift_firstseen_www.amazon.co.uk`. | confirmed, **not fixed**: one line in `background.ts` (`chrome.storage.session.setAccessLevel(...)`) would switch a cut-list feature on at checkout, unreviewed, days before the demo. Siv's call (question 9). |
 | F10 | P2 | **Suspected: T&C timeout discards page-text values.** `terms_source` runs page-snippet extraction then T&C extraction inside one 25 s `wait_for`; on timeout `result` is `None`, so values already verified from the page snippets are lost and all three cards say not_found. | Make the T&C extraction slow in `FakeLLM(delay=…)` with page snippets present; page values disappear. Not written as a test because the behaviour is a degradation, not a wrong value. | suspected, open |
 | F11 | P2 | **One long T&C page can use most of a day's budget.** 500,000 characters ≈ 21 chunks × $0.0036 reserved = $0.075 per document; three documents ≈ $0.20, the whole daily limit for that install. The next page shows `limit_reached` (visible since F6). | Arithmetic from `spend.py` and `text.py`; Audible's terms were 46 k characters (2 chunks) on 2026-11-08. | open; mitigation R4 |
 | F12 | P2 | `/flag/company-match` (V4) is posted from `App.tsx` without `credentials: "omit"` / `referrerPolicy: "no-referrer"`, unlike `/analyse`. Nothing user-specific beyond the install id and page URL is in the body. | read `extension/src/sidepanel/App.tsx onFlagCompany` | open (extension/, for Siv) |
@@ -97,6 +97,7 @@ Rated by demo impact. P0: wrong value, hang, or an invariant breach. P1: visible
 | F14 | P2 | Brands with no parent and no UK number (Netflix, PureGym) are "No public records matched" although Wikidata identifies them: `_wikidata_lookup` returns nothing when neither a CH number nor a parent is found, and GLEIF/Companies House need the legal name ("Netflix, Inc."). By design (no fuzzy matching); the demo pages avoid it (Vodafone matches with 9 records). | `scripts/company_coverage.py SodaStream "Pepsi Max" Vodafone` → 0, owner only, full match | accepted; see R7 |
 | F15 | P2 | A fresh install UUID is a fresh $0.20 budget and a fresh rate-limit bucket. A judge can't reach it by accident; someone scripting requests can. There is no per-IP limit. | `spend.py`, `rate_limit.py` | accepted for the demo; see R4 |
 | F16 | P2 | Deploy drift: `backend/Procfile` and `backend/nixpacks.toml` were stale (Railway uses Railpack from `railway.json`/`railpack.json`). `backend/requirements.txt` duplicates the root file; kept because `test_llm_provider.py` reads it. | `git log -- backend/Procfile` | Procfile and nixpacks removed (`55d4a43`) |
+| F17 | P1 | **"Seller: Amazon Europe Core SARL" on both Amazon demo pages**, quoted from "This website is owned and maintained by Amazon Europe Core SARL." The quote is verbatim; the value names the site owner, not who sells the item. It sits on the small-print card the demo script points at, and `demo/DEMO.md` already lists it as a row not to point at. | 6-page harness run (§5), pages #2 and #6; `test_returns_window_and_seller_rules` new case | fixed (`921b47e`): the seller rule that rejects "Credit broker:" lines also rejects "website is owned" / "owned and maintained" / "owned and operated" |
 
 Leads checked and rejected:
 
@@ -129,7 +130,27 @@ Leads checked and rejected:
 | req_netflix | 0.19 s | 1.25 s not_found | 3.18 s found (£4.99) · found (auto_renews, cancel_method) · not_found | 3.18 s |
 | req_sodastream (product) | 0.21 s | 1.32 s not_found | 3.01 s n_a · n_a · found (Returns window, Seller) | 3.01 s |
 
-No contract problems. Live company matching (free, direct): SodaStream not identified; Pepsi Max → PepsiCo, no UK number; Vodafone → 01833679 with 9 records, 1.6 s. The 40-URL harness was not run (it needs your go-ahead).
+No contract problems. Live company matching (free, direct): SodaStream not identified; Pepsi Max → PepsiCo, no UK number; Vodafone → 01833679 with 9 records, 1.6 s.
+
+### Harness on the demo pages (`demo/run40.mjs --urls demo/demo-urls.txt`, live Railway, headed Chromium, 09:15 UTC)
+
+Run on the six demo URLs rather than all 40: the demo path is what matters, and a full run from one install would exhaust the $0.20 daily spend limit partway and invalidate itself (see R4). Results in the job's scratch folder, not in `demo/review40.csv`.
+
+| Bar | Result |
+|---|---|
+| Correct state | PASS 6/6: no spinner, no error banner, BBC page shows the one no-purchase card in 0.1 s |
+| Zero wrong values | 63 values; 25 quoted values all re-verified in their sources (0 `not_in_source`), 38 need no quote. Known weak rows from `demo/DEMO.md` still show (Audible lock-in from "Cancel monthly", Spotify "Auto-renews" from the price line, Vodafone "Auto-renews"/"How to cancel" from the bundle terms). The Amazon "Seller" row is F17, fixed on this branch but not yet deployed. |
+| Found cards | PASS 5/6 (BBC excluded by design) |
+| Timings | FAIL, all six misses on Vodafone's first visit: item/price-drift 5.5 s, company 6.3 s, T&C 21.7 s. Everything else inside its limit. Second (cached) visits: all T&C cards ≤ 5.0 s, p50 0.9 s. |
+
+| Page | First visit | Found | Note |
+|---|---|---|---|
+| Audible | 8 s | cost, lock_in, small_print | Trial £0.99 ×3 then £5.99: total £56.88 over 12 months |
+| Amazon SanDisk | 14 s | small_print | cost/lock-in n_a (product only); returns window 30 days |
+| Vodafone | 30 s | company, cost, lock_in, small_print | `analyseCalls = 2`: the page's JSON-LD changed after load, the panel re-ran, so the clock restarted ~5 s in; the T&C cards then took 16 s of extraction. 9 company records. |
+| BBC | 6 s page load | none | one card, 0.1 s |
+| Spotify | 8 s | cost, lock_in, small_print | £0 for 1 month then £12.99: total £142.89 |
+| Amazon Philips Hue | 10 s | small_print | returns window 30 days |
 
 ## 6. Demo path risk register
 
@@ -138,7 +159,7 @@ Path: install from the zip → Skip → Amazon product page → cards stream →
 | # | Risk | Mitigation |
 |---|---|---|
 | R1 | Venue wifi drops: the panel shows "Couldn't reach the SmallPrint server" with Retry (no hang). | Phone hotspot ready; backup video (`demo/DEMO.md` H19). |
-| R2 | Cold cache: Vodafone's first visit took 27 s on 2026-11-08, over the 25 s T&C budget, so its T&C cards say not found. | Run `scripts/prewarm.py` after the final deploy (needs `SMALLPRINT_PREWARM_KEY` on Railway: after F1 only the pre-warm run fills the site cache), then open each demo page twice within 30 minutes. The per-document cache still warms on a visit when the fetched text is identical. |
+| R2 | Cold cache: Vodafone's first visit took 27 s earlier on 2026-11-08 and 21.7 s in this review's run, against the 25 s T&C budget, so its T&C cards can say not found. Its page also re-detects a few seconds after load (JSON-LD re-render), which restarts the cards once. | Run `scripts/prewarm.py` after the final deploy (needs `SMALLPRINT_PREWARM_KEY` on Railway: after F1 only the pre-warm run fills the site cache), then open each demo page twice within 30 minutes. The per-document cache still warms on a visit when the fetched text is identical. |
 | R3 | Railway restarts or redeploys: cache and spend counters are in memory and reset. | Re-run the pre-warm after any deploy; freeze deploys before the pitch; check Railway shows the last deploy Active. |
 | R4 | Judges playing freely hit the $0.20 daily limit; cards now say "Limit reached" instead of disappearing. One long T&C page can take most of it (F11). | Set `SMALLPRINT_DAILY_LIMIT_USD=2` for the day (`demo/DEMO.md`). A fresh Chrome profile is a fresh UUID and budget. |
 | R5 | Mock mode by accident (key removed or renamed in Railway variables) shows fixture data. | Before the pitch, POST the SodaStream probe with no page text: the real pipeline answers `cost n_a`; mock mode answers the SodaStream fixture with `MOCK:` text. F8 makes other Amazon pages say not found rather than show SodaStream figures. |
@@ -159,3 +180,4 @@ Path: install from the zip → Skip → Amazon product page → cards stream →
 6. What daily limit do you want on the day (R4)?
 7. Netflix and PureGym show "No public records matched" (F14). Acceptable messaging, or should the card say "identified, no UK filing" when Wikidata knows the brand but no parent or number exists?
 8. Extension changes in this PR (`src/sse.ts`, `test/sse.test.ts`) are listed separately in the PR for Siv.
+9. F9 (price drift never records a first-seen price) is confirmed. The fix is one call in `background.ts`, `chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" })`, but it would make the price-drift card start showing values at checkout for the first time. Ship it, or leave V3 as n_a for the demo?
