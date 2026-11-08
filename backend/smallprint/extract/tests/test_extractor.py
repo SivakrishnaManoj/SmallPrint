@@ -227,7 +227,8 @@ AMAZON_SRC = (
     "Free returns are available for the shipping address you chose. "
     "For a full refund with no deduction for return shipping, you can return the item for any reason "
     "in new and unused condition. Credit broker: Amazon EU S.A.R.L. "
-    "You can return this item within 30 days of receipt. Sold by Example Retail UK Ltd."
+    "You can return this item within 30 days of receipt. Sold by Example Retail UK Ltd. "
+    "This website is owned and maintained by Amazon Europe Core SARL."
 )
 
 
@@ -241,6 +242,8 @@ AMAZON_SRC = (
                         "quote": "For a full refund with no deduction for return shipping, you can return the item for any reason in new and unused condition."}, False),
     ("returns_window", {"value": "14 days", "quote": "You can return this item within 30 days of receipt."}, False),  # number not in quote
     ("seller", {"value": "Amazon EU S.A.R.L.", "quote": "Credit broker: Amazon EU S.A.R.L."}, False),
+    # The site owner from the footer, not who sells the item (both Amazon demo pages, harness 2026-11-08).
+    ("seller", {"value": "Amazon Europe Core SARL", "quote": "This website is owned and maintained by Amazon Europe Core SARL."}, False),
     ("seller", {"value": "Example Retail UK Ltd", "quote": "Sold by Example Retail UK Ltd."}, True),
     ("seller", {"value": "example retail uk ltd", "quote": "Sold by Example Retail UK Ltd."}, True),
     ("seller", {"value": "Spotify Ltd", "quote": "Sold by Example Retail UK Ltd."}, False),  # name not in the quote

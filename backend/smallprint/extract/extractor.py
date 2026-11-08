@@ -134,9 +134,15 @@ def _is_duration_in_quote(value: str, quote: str) -> bool:
     return bool(m) and _number_in_quote(int(m.group(1)), quote)
 
 
+_NOT_THE_SELLER = ("credit broker", "website is owned", "owned and maintained", "owned and operated")
+
+
 def _names_a_credit_broker(quote: str) -> bool:
-    """Amazon's "Credit broker: Amazon EU S.A.R.L." is the finance offer, not who sells the item."""
-    return "credit broker" in quote.lower()
+    """A company named in a quote that isn't about who sells the item: Amazon's "Credit broker:
+    Amazon EU S.A.R.L." is the finance offer, and "This website is owned and maintained by Amazon
+    Europe Core SARL" is the site owner (both Amazon demo pages, harness run 2026-11-08)."""
+    q = quote.lower()
+    return any(phrase in q for phrase in _NOT_THE_SELLER)
 
 
 def verify_extraction(raw: dict[str, Any], source: str) -> dict[str, dict]:
