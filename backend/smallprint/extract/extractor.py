@@ -305,7 +305,9 @@ def build_cards(found: dict[str, dict], limit_reached: bool = False) -> dict:
     cost_streams: list[dict] = []
     trial_months = found.get("trial_months", {}).get("value")
     trial = found.get("trial_price")
-    has_trial = trial is not None and trial_months
+    # A trial counts only next to the price it turns into: on its own it would make the
+    # lifetime total the trial price over the whole horizon (£0 for a free trial).
+    has_trial = trial is not None and trial_months and "monthly_price" in found
     if has_trial:
         cost_streams.append({"label": "Trial", "type": "recurring", "amount": trial["value"],
                              "from_month": 1, "to_month": trial_months, "evidence": _evidence(trial)})

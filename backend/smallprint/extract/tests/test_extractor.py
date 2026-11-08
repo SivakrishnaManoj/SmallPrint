@@ -17,7 +17,7 @@ import pymupdf
 import pytest
 from openai import AsyncOpenAI
 
-from smallprint.extract import Document, analyse_documents, chunk_text, html_to_text, pdf_b64_to_text
+from smallprint.extract import Document, analyse_documents, build_cards, chunk_text, html_to_text, pdf_b64_to_text
 from smallprint.extract.extractor import MAX_INPUT_TOKENS, MODEL, _number_in_quote, verify_extraction
 from smallprint.extract.text import estimate_tokens
 from smallprint.verify import verify_quote
@@ -260,6 +260,18 @@ def test_number_in_quote():
     assert not _number_in_quote(5, "£5.99 per month")
     assert _number_in_quote(5, "a fee of £5. Cancel any time.")
 
+
+def test_a_trial_without_its_full_price_gives_no_cost_total():
+    """A trial stream on its own makes the panel total the trial price over the whole horizon
+    (£0 for a free trial): a wrong number with a verified quote. No full price, no total."""
+    quote = "Free for the first 3 months."
+    found = {
+        "trial_price": {"value": 0, "quote": quote, "url": GYM_URL, "source": None},
+        "trial_months": {"value": 3, "quote": quote, "url": GYM_URL, "source": None},
+    }
+    out = build_cards(found)
+    assert out["cost_streams"] == []
+    assert out["card_states"]["cost"] == "not_found"
 
 
 # --- text handling -------------------------------------------------------
