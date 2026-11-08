@@ -21,10 +21,19 @@ function report() {
 
 report();
 
-// Single-page shops change product or step without a page load: re-check after the DOM settles.
+// Single-page shops change product without a page load (W7). Two signals, both debounced:
+//  - the URL changes: history.pushState fires no event a content script can hear, so poll it;
+//  - the DOM changes: a new product renders into the same page.
 let timer: ReturnType<typeof setTimeout> | undefined;
-new MutationObserver(() => {
+const soon = (ms: number) => {
   clearTimeout(timer);
-  timer = setTimeout(report, 1000);
-}).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-addEventListener("popstate", () => setTimeout(report, 300));
+  timer = setTimeout(report, ms);
+};
+new MutationObserver(() => soon(600)).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+let href = location.href;
+setInterval(() => {
+  if (location.href === href) return;
+  href = location.href;
+  soon(300); // give the app a moment to render the new product
+}, 400);
+addEventListener("popstate", () => soon(300));

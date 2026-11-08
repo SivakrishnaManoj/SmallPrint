@@ -61,7 +61,9 @@ export function App() {
   const [editingSettings, setEditingSettings] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [cards, setCards] = useState<StreamCard[]>([]);
-  const [status, setStatus] = useState<Status>("streaming");
+  // Starts "done": nothing is loading until there's a purchase to analyse, so a page with
+  // no purchase never flashes the spinner (W7).
+  const [status, setStatus] = useState<Status>("done");
   // While streaming: "terms" = fetching the T&C pages, "cards" = waiting for the server.
   const [phase, setPhase] = useState<"terms" | "cards">("cards");
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +220,7 @@ export function App() {
         ))}
       </div>
 
-      {status === "streaming" && (
+      {status === "streaming" && request && (
         <div class="sp-progress" data-testid="progress">
           <span class="spinner" aria-hidden="true" />
           <span>
@@ -232,9 +234,12 @@ export function App() {
       {noPurchasePage && (
         <div class="cards" data-testid="no-purchase">
           <ItemCard item={{}} state="n_a" purchaseTypes={[]} />
-          <p class="sp-footnote">
-            <button class="btn btn--ghost" onClick={() => setDemo(true)}>Try the demo purchase</button>
-          </p>
+          {/* W7: one card only. The demo request is a developer aid, so it's left out of release builds. */}
+          {import.meta.env.DEV && (
+            <p class="sp-footnote">
+              <button class="btn btn--ghost" onClick={() => setDemo(true)}>Try the demo purchase</button>
+            </p>
+          )}
         </div>
       )}
       {active === undefined && !demo && <div class="loading">Looking at this page…</div>}
