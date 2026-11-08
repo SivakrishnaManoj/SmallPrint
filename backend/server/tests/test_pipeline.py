@@ -274,6 +274,18 @@ async def test_product_only_purchase_has_no_cost_or_lock_in(monkeypatch, tracker
     jsonschema.validate(assemble(prod), RESPONSE_SCHEMA)
 
 
+async def test_product_only_timeout_still_says_cost_and_lock_in_dont_apply(monkeypatch, tracker):
+    # 40-URL run 2026-11-08: a slow Amazon page timed out and showed cost "Not found".
+    monkeypatch.setattr(pipeline, "TERMS_TIMEOUT_S", 0.2)
+    use_llm(monkeypatch, FakeLLM(delay=5))
+    events = await stream({**REQUEST, "purchase_type_signals": ["product"]})
+    by_card = cards(events)
+    assert by_card["cost"]["state"] == "n_a"
+    assert by_card["lock_in"]["state"] == "n_a"
+    assert by_card["small_print"]["state"] == "not_found"
+    assert events[-1][0] < 3
+
+
 @pytest.mark.parametrize("signals", [["product", "subscription"], ["product", "contract"], []])
 async def test_cost_and_lock_in_kept_unless_the_page_is_only_a_product(monkeypatch, tracker, signals):
     use_llm(monkeypatch, FakeLLM())

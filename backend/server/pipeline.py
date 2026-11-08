@@ -200,7 +200,12 @@ async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncOp
         return result
 
     # One budget for search, extraction and refill, so the cards always resolve in time.
-    result = await asyncio.wait_for(run_all(), TERMS_TIMEOUT_S)
+    try:
+        result = await asyncio.wait_for(run_all(), TERMS_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        # A slow product page still says cost and lock-in don't apply (40-URL run 2026-11-08).
+        log.warning("terms source timed out after %ss", TERMS_TIMEOUT_S)
+        result = None
     if result is None:
         if product_only(request):
             return _not_found(("cost", "lock_in"), "n_a") + _not_found(("small_print",))

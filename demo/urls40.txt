@@ -8,7 +8,7 @@ amazon,https://www.amazon.co.uk/dp/B09WFC9KNT,Canon PIXMA inkjet printer (ink re
 amazon,https://www.amazon.co.uk/dp/B0CWB8GHFT,Ninja Dual Zone air fryer
 amazon,https://www.amazon.co.uk/dp/B09GWM37L4,Kindle Paperwhite 11th Gen
 amazon,https://www.amazon.co.uk/dp/B09DRYJX2K,Instant Pot Duo 7-in-1 6L
-amazon,https://www.amazon.co.uk/dp/B09X7FXHVJ,DeLonghi Dedica coffee grinder
+amazon,https://www.amazon.co.uk/dp/B09X7FXHVJ,SanDisk 128GB Extreme PRO SD card (was DeLonghi grinder before 2026-11-08)
 amazon,https://www.amazon.co.uk/dp/B0D5NW2WR8,Breville VST045 toasted sandwich maker
 amazon,https://www.amazon.co.uk/dp/B08BHWPXKW,LEGO Technic Land Rover Defender
 amazon,https://www.amazon.co.uk/dp/B09B96TG33,Echo Dot 2022
