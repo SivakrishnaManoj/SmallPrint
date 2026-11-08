@@ -90,9 +90,9 @@ Fields (value type in brackets):
 - notice_days (integer): notice period in days.
 - auto_renews (boolean): whether the contract renews automatically.
 - cancel_method (string): how to cancel, e.g. "online in your account" or "by phone".
-- returns_window (string): time allowed to return a product.
+- returns_window (string): time allowed to return a product, as a length of time with digits, e.g. "30 days". Not a condition ("in new and unused condition") or a cost ("free returns").
 - warranty (string): warranty or guarantee length.
-- seller (string): legal name of the company the customer contracts with.
+- seller (string): legal name of the company the customer contracts with. Not a credit broker or lender.
 
 Numbers must appear as digits in the quote. If the document writes "one month", leave notice_days null.
 
@@ -116,6 +116,25 @@ def _number_in_quote(value: float | int, quote: str) -> bool:
     else:
         forms.add(f"{value:g}")
     return any(re.search(rf"(?<![\d.]){re.escape(f)}(?![\d])", plain) for f in forms)
+
+
+# "30 days", "28 calendar days", "2-week", "12 months"
+_DURATION = re.compile(r"(?<![\d.])(\d+)\s*-?\s*(?:[a-z]+\s+)?(?:day|week|month|year)s?\b", re.IGNORECASE)
+
+
+def _is_duration_in_quote(value: str, quote: str) -> bool:
+    """A returns window is a length of time: digits plus a unit, and the number is in the quote.
+
+    40-URL run 2026-11-08: Amazon pages gave "for free", "in new and unused condition" and
+    "for a full refund with no deduction for return shipping": verbatim quotes, not a window.
+    """
+    m = _DURATION.search(value)
+    return bool(m) and _number_in_quote(int(m.group(1)), quote)
+
+
+def _names_a_credit_broker(quote: str) -> bool:
+    """Amazon's "Credit broker: Amazon EU S.A.R.L." is the finance offer, not who sells the item."""
+    return "credit broker" in quote.lower()
 
 
 def verify_extraction(raw: dict[str, Any], source: str) -> dict[str, dict]:
@@ -142,6 +161,11 @@ def verify_extraction(raw: dict[str, Any], source: str) -> dict[str, dict]:
                 value = int(value)
         if vtype == "string" and not (isinstance(value, str) and value.strip()):
             continue
+        if name == "returns_window" and not _is_duration_in_quote(value, ok["quote"]):
+            continue
+        if name == "seller" and (_names_a_credit_broker(ok["quote"])
+                                 or value.strip().lower() not in ok["quote"].lower()):
+            continue  # a company name is quoted as written ("Spotify Ltd" from a line without it, 2026-11-08)
         kept[name] = {"value": value, "quote": ok["quote"]}
     return kept
 

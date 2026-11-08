@@ -222,6 +222,33 @@ def test_verify_extraction_rules(name, item, kept):
     assert (name in verify_extraction({name: item}, SRC)) is kept
 
 
+# Amazon product page lines from the 40-URL run on 2026-11-08 (verbatim quotes, wrong meaning).
+AMAZON_SRC = (
+    "Free returns are available for the shipping address you chose. "
+    "For a full refund with no deduction for return shipping, you can return the item for any reason "
+    "in new and unused condition. Credit broker: Amazon EU S.A.R.L. "
+    "You can return this item within 30 days of receipt. Sold by Example Retail UK Ltd."
+)
+
+
+@pytest.mark.parametrize("name,item,kept", [
+    ("returns_window", {"value": "30 days", "quote": "You can return this item within 30 days of receipt."}, True),
+    ("returns_window", {"value": "within 30 days of receipt", "quote": "You can return this item within 30 days of receipt."}, True),
+    ("returns_window", {"value": "for free", "quote": "Free returns are available for the shipping address you chose."}, False),
+    ("returns_window", {"value": "in new and unused condition",
+                        "quote": "you can return the item for any reason in new and unused condition."}, False),
+    ("returns_window", {"value": "for a full refund with no deduction for return shipping",
+                        "quote": "For a full refund with no deduction for return shipping, you can return the item for any reason in new and unused condition."}, False),
+    ("returns_window", {"value": "14 days", "quote": "You can return this item within 30 days of receipt."}, False),  # number not in quote
+    ("seller", {"value": "Amazon EU S.A.R.L.", "quote": "Credit broker: Amazon EU S.A.R.L."}, False),
+    ("seller", {"value": "Example Retail UK Ltd", "quote": "Sold by Example Retail UK Ltd."}, True),
+    ("seller", {"value": "example retail uk ltd", "quote": "Sold by Example Retail UK Ltd."}, True),
+    ("seller", {"value": "Spotify Ltd", "quote": "Sold by Example Retail UK Ltd."}, False),  # name not in the quote
+])
+def test_returns_window_and_seller_rules(name, item, kept):
+    assert (name in verify_extraction({name: item}, AMAZON_SRC)) is kept
+
+
 def test_number_in_quote():
     assert _number_in_quote(29.99, "£29.99 a month")
     assert _number_in_quote(30, "30 days' notice")
