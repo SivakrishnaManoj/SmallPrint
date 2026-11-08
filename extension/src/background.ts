@@ -1,7 +1,8 @@
 import { getInstallId } from "./install";
-import { tabKey, type DetectionMessage, type StoredDetection } from "./messages";
+import { tabKey, type DetectionMessage, type PriceDriftMessage, type StoredDetection } from "./messages";
 import type { Detection } from "./detect";
 import { TITLES, tabState } from "./tabState";
+import { priceDriftKey } from "./priceDrift";
 
 // Clicking the toolbar icon opens the side panel.
 const openOnClick = () => chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
@@ -25,21 +26,27 @@ async function setBadge(tabId: number, detection: Detection | null) {
   await chrome.action.setTitle({ tabId, title: TITLES[state] });
 }
 
-chrome.runtime.onMessage.addListener((msg: DetectionMessage, sender) => {
+chrome.runtime.onMessage.addListener((msg: DetectionMessage | PriceDriftMessage, sender) => {
   const tabId = sender.tab?.id;
-  if (msg?.type !== "smallprint:detection" || tabId === undefined || sender.id !== chrome.runtime.id) return;
+  if (tabId === undefined || sender.id !== chrome.runtime.id) return;
   if (sender.frameId !== 0) return; // top frame only
-  const stored: StoredDetection = { url: msg.url, detection: msg.detection };
-  chrome.storage.session.set({ [tabKey(tabId)]: stored }).catch(console.error);
-  setBadge(tabId, msg.detection).catch(console.error);
+
+  if (msg?.type === "smallprint:detection") {
+    const stored: StoredDetection = { url: msg.url, detection: msg.detection };
+    chrome.storage.session.set({ [tabKey(tabId)]: stored }).catch(console.error);
+    setBadge(tabId, msg.detection).catch(console.error);
+  } else if (msg?.type === "smallprint:pricedrift") {
+    // Price drift data lives in session storage only — never sent to backend.
+    chrome.storage.session.set({ [priceDriftKey(tabId)]: msg.drift }).catch(console.error);
+  }
 });
 
 // A new page load starts clean, so stale results never show (e.g. on pages the content script can't run in).
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status !== "loading" || !info.url) return;
-  chrome.storage.session.remove(tabKey(tabId)).catch(() => {});
+  chrome.storage.session.remove([tabKey(tabId), priceDriftKey(tabId)]).catch(() => {});
   setBadge(tabId, null).catch(() => {});
 });
 chrome.tabs.onRemoved.addListener((tabId) => {
-  chrome.storage.session.remove(tabKey(tabId)).catch(() => {});
+  chrome.storage.session.remove([tabKey(tabId), priceDriftKey(tabId)]).catch(() => {});
 });

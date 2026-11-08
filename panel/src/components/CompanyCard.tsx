@@ -17,6 +17,7 @@ export const KIND_LABELS: Record<string, string> = {
   donation: "Political donation",
   gender_pay_gap: "Gender pay gap report",
   modern_slavery: "Modern slavery statement",
+  asa_ruling: "ASA ruling",
   regulator_decision: "Regulator decision",
   nmw_underpayment: "Minimum wage underpayment",
   prompt_payment: "Payment practices report",

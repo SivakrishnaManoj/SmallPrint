@@ -14,6 +14,7 @@ const RECORD_KIND_OPTIONS = [
   { id: "donation", label: "Political donations" },
   { id: "gender_pay_gap", label: "Gender pay gap" },
   { id: "modern_slavery", label: "Modern slavery statements" },
+  { id: "asa_ruling", label: "ASA advertising rulings" },
 ];
 
 export function FirstRunForm({ onComplete, initial = DEFAULT_SETTINGS, title = "Set up Small Print" }: Props) {

@@ -97,9 +97,10 @@ The pages are hand-trimmed copies built on the real DOM structure of each site t
 ```bash
 npm test                                # detection over saved pages, T&C fetcher, SSE client (vitest, no browser)
 npm run build && npm run e2e            # loads dist/ in Chromium against a running backend
+npm run test40                          # the 40-URL test on the real internet; prints the pass-bar report (see demo/README.md)
 ```
 
-`npm run e2e` needs Playwright and Chromium available (`NODE_PATH=$(npm root -g)` if Playwright is installed globally). It checks these things:
+Playwright is a devDependency, so `npm ci` installs it. Run `npx playwright install chromium` once if the browser is missing. `npm run e2e` checks these things:
 
 - Installing opens the setup form, which asks only for horizon and record kinds.
 - Skip stores the defaults, and the panel then works.
