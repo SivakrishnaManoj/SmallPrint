@@ -72,11 +72,13 @@ try {
   const legends = await setup.locator("legend").allTextContents();
   check(legends.length === 2 && !/postcode/i.test(legends.join()), `first-run form asks only for: ${legends.join(" / ")}`);
   if (shots) await setup.screenshot({ path: join(shots, "firstrun.png") });
+  // However many record kinds the form offers, Skip must keep every one of them.
+  const kindsOffered = await setup.locator('input[type="checkbox"]').count();
   await setup.getByText("Skip (use defaults)").click();
   await setup.getByTestId("setup-saved").waitFor();
   const stored = await setup.evaluate(() => chrome.storage.local.get(null));
-  check(stored.smallprint_settings?.horizon === 12 && stored.smallprint_settings?.recordKinds?.length === 5 && stored.setup_done === true,
-    "Skip stores 12 months + every record kind in chrome.storage.local");
+  check(stored.smallprint_settings?.horizon === 12 && stored.smallprint_settings?.recordKinds?.length === kindsOffered && kindsOffered > 0 && stored.setup_done === true,
+    `Skip stores 12 months + every record kind (${kindsOffered}) in chrome.storage.local`);
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   check(UUID_RE.test(stored.install_id ?? ""), `install UUID generated (${stored.install_id})`);
 
@@ -175,7 +177,8 @@ try {
       `only non-standard header is X-Install-Id = the stored UUID (custom: ${custom.join(", ")})`);
     check(!("cookie" in headers) && !("referer" in headers), "no cookie or referer sent");
     const body = r.postDataJSON();
-    check(["item,links,page_text_snippets,price_drift,purchase_type_signals", "item,links,page_text_snippets,price_drift,purchase_type_signals,terms"]
+    // No price_drift: price-drift data never leaves the browser (#45).
+    check(["item,links,page_text_snippets,purchase_type_signals", "item,links,page_text_snippets,purchase_type_signals,terms"]
       .includes(Object.keys(body).sort().join()) &&
       !/install_id|postcode|horizon|recordKinds|political_donations/.test(JSON.stringify(body)),
       `body is page data only (keys: ${Object.keys(body).join(", ")})`);
