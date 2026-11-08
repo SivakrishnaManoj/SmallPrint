@@ -9,6 +9,7 @@ Done when:
 from __future__ import annotations
 
 import json
+import re
 import os
 import sqlite3
 from pathlib import Path
@@ -491,3 +492,160 @@ async def test_live_known_brand_resolves_quickly(tmp_path):
     assert result["ch_number"] == "00445790"
     assert result["match_via"] == "Wikidata"
     assert time.monotonic() - started < 5
+
+
+# ---------------------------------------------------------------------------
+# Gaps found with Pepsi Max: owner kept without a CH number, manufacturer links,
+# looking down to one UK subsidiary, the parent's LEI, parent names, brand clean-up
+# ---------------------------------------------------------------------------
+
+from smallprint.company import clean_brand  # noqa: E402
+
+_PEPSICO_LEI = "549300PEPSICOUSA0012"
+
+
+def _pepsi_max(pepsico: dict, extra: dict | None = None):
+    """Pepsi Max linked to PepsiCo only by manufacturer (P176), as product brands usually are."""
+    return _wikidata(
+        _search_hits(("Q100", "Pepsi Max")),
+        {
+            "Q100": _entity("Q100", "Pepsi Max", _item_claim("P176", "Q200"), _claim("P856", "https://www.pepsimax.co.uk/")),
+            "Q200": pepsico,
+            **(extra or {}),
+        },
+    )
+
+
+_PEPSICO_NO_UK = _entity("Q200", "PepsiCo", _claim("P856", "https://www.pepsico.com/"))
+
+
+async def test_owner_kept_when_no_uk_company_number(db):
+    """Pepsi Max → PepsiCo, nothing registered in the UK: show the owner, not "not identified"."""
+    http, _ = _client({"https://www.wikidata.org": _pepsi_max(_PEPSICO_NO_UK), "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY})
+    async with http:
+        result = await company_lookup("Pepsi Max", "https://www.amazon.co.uk/dp/X", http=http, db_path=db, ch_api_key="")
+    assert result == {"brand": "Pepsi Max", "parent": "PepsiCo", "ch_number": None, "match_via": "Wikidata", "records": []}
+
+
+async def test_manufacturer_counts_only_when_single(db):
+    two_makers = _wikidata(
+        _search_hits(("Q100", "Pepsi Max")),
+        {"Q100": _entity("Q100", "Pepsi Max", _item_claim("P176", "Q200"), _item_claim("P176", "Q201"),
+                         _claim("P856", "https://www.pepsimax.co.uk/"))},
+    )
+    http, _ = _client({"https://www.wikidata.org": two_makers, "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY})
+    async with http:
+        result = await company_lookup("Pepsi Max", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
+    assert result["match_via"] == "Brand not identified" and result["parent"] is None
+
+
+async def test_one_uk_subsidiary_gives_the_ch_number(db):
+    pepsico = _entity("Q200", "PepsiCo", _claim("P856", "https://www.pepsico.com/"), _item_claim("P355", "Q300"), _item_claim("P355", "Q301"))
+    extra = {
+        "Q300": _entity("Q300", "PepsiCo UK Holdings", _claim("P2622", "SC127671")),
+        "Q301": _entity("Q301", "PepsiCo Mexico"),  # not UK-registered: ignored
+    }
+    http, _ = _client({"https://www.wikidata.org": _pepsi_max(pepsico, extra), "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY})
+    async with http:
+        result = await company_lookup("Pepsi Max", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
+    assert result["ch_number"] == "SC127671"
+    assert result["parent"] == "PepsiCo"
+    assert result["match_via"] == "Wikidata, via its UK subsidiary PepsiCo UK Holdings"
+    assert {r["kind"] for r in result["records"]} == {"gender_pay_gap", "donation"}
+
+
+async def test_several_uk_subsidiaries_are_not_guessed(db):
+    pepsico = _entity("Q200", "PepsiCo", _claim("P856", "https://www.pepsico.com/"), _item_claim("P355", "Q300"), _item_claim("P355", "Q301"))
+    extra = {"Q300": _entity("Q300", "PepsiCo UK A", _claim("P2622", "SC127671")),
+             "Q301": _entity("Q301", "PepsiCo UK B", _claim("P2622", "01234567"))}
+    http, _ = _client({"https://www.wikidata.org": _pepsi_max(pepsico, extra), "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY})
+    async with http:
+        result = await company_lookup("Pepsi Max", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
+    assert result["ch_number"] is None and result["records"] == []
+    assert result["parent"] == "PepsiCo"  # still shown
+
+
+def _lei_record(name: str, ch: str | None, authority: str = "RA000585") -> dict:
+    return {"attributes": {"entity": {"legalName": {"name": name}, "registeredAt": {"id": authority}, "registeredAs": ch}}}
+
+
+async def test_parent_lei_finds_its_one_uk_child(db):
+    pepsico = _entity("Q200", "PepsiCo", _claim("P856", "https://www.pepsico.com/"), _claim("P1278", _PEPSICO_LEI))
+    http, transport = _client({
+        "https://www.wikidata.org": _pepsi_max(pepsico),
+        f"https://api.gleif.org/api/v1/lei-records/{_PEPSICO_LEI}/direct-children": {"data": [
+            _lei_record("PEPSICO INTERNATIONAL LIMITED", "SC127671"),
+            _lei_record("PEPSICO DE MEXICO", "X1", authority="RA000999"),
+        ]},
+        f"https://api.gleif.org/api/v1/lei-records/{_PEPSICO_LEI}": {"data": _lei_record("PepsiCo, Inc.", "2685000", authority="RA000602")},
+        "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY,
+    })
+    async with http:
+        result = await company_lookup("Pepsi Max", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
+    assert result["ch_number"] == "SC127671"
+    assert result["match_via"] == "Wikidata, then GLEIF: PEPSICO INTERNATIONAL LIMITED"
+    assert result["records"]
+
+
+async def test_parent_lei_with_several_uk_children_is_not_guessed(db):
+    pepsico = _entity("Q200", "PepsiCo", _claim("P856", "https://www.pepsico.com/"), _claim("P1278", _PEPSICO_LEI))
+    http, _ = _client({
+        "https://www.wikidata.org": _pepsi_max(pepsico),
+        f"https://api.gleif.org/api/v1/lei-records/{_PEPSICO_LEI}/direct-children": {"data": [
+            _lei_record("PEPSICO INTERNATIONAL LIMITED", "SC127671"), _lei_record("WALKERS SNACK FOODS LIMITED", "00176753")]},
+        f"https://api.gleif.org/api/v1/lei-records/{_PEPSICO_LEI}": {"data": _lei_record("PepsiCo, Inc.", "2685000", authority="RA000602")},
+        "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY,
+    })
+    async with http:
+        result = await company_lookup("Pepsi Max", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
+    assert result["ch_number"] is None and result["parent"] == "PepsiCo"
+
+
+async def test_exact_search_also_tries_the_parent_name(db):
+    """GLEIF and Companies House exact-name searches run for the parent too."""
+    fernline = _wikidata(
+        _search_hits(("Q100", "Fernline Fibre")),
+        {"Q100": _entity("Q100", "Fernline Fibre", _item_claim("P749", "Q200"), _claim("P856", "https://fernline.example/")),
+         "Q200": _entity("Q200", "FERNLINE HOLDINGS PLC")},
+    )
+    http, transport = _client({
+        "https://www.wikidata.org": fernline,
+        "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY,
+        "https://api.company-information.service.gov.uk": _CH_EXACTMATCH,
+    })
+    async with http:
+        result = await company_lookup("Fernline Fibre", "fernline.example", http=http, db_path=db, ch_api_key="key")
+    assert result["ch_number"] == "01234567"
+    assert result["parent"] == "FERNLINE HOLDINGS PLC"
+    assert result["match_via"] == "Wikidata, then Companies House exact name"
+    assert sum("search/companies" in u for u in transport.calls) == 2  # brand first, then parent
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("Visit the Pepsi Max Store", "Pepsi Max"),
+    ("Brand: Dove", "Dove"),
+    ("PEPSI MAX®", "PEPSI MAX"),
+    ("Andrex Official Store", "Andrex"),
+    ("Walkers™ ", "Walkers"),
+    ("  Tesco  ", "Tesco"),
+    ("Storey & Co", "Storey & Co"),   # "store" only removed as a trailing word
+    ("", ""),
+])
+def test_clean_brand(raw, expected):
+    assert clean_brand(raw) == expected
+
+
+async def test_page_brand_text_is_cleaned_before_the_exact_search(db):
+    http, transport = _client({"https://www.wikidata.org": _pepsi_max(_PEPSICO_NO_UK), "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY})
+    async with http:
+        result = await company_lookup("Visit the Pepsi Max® Store", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
+    assert result["brand"] == "Pepsi Max" and result["parent"] == "PepsiCo"
+
+
+async def test_new_match_descriptions_have_no_verdict_words(db):
+    pepsico = _entity("Q200", "PepsiCo", _claim("P856", "https://www.pepsico.com/"), _item_claim("P355", "Q300"))
+    extra = {"Q300": _entity("Q300", "PepsiCo UK Holdings", _claim("P2622", "SC127671"))}
+    http, _ = _client({"https://www.wikidata.org": _pepsi_max(pepsico, extra), "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY})
+    async with http:
+        result = await company_lookup("Pepsi Max", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
+    assert not re.search(r"\b(good|bad|ethical|unethical|score|rating|verdict|avoid)\b", json.dumps(result), re.I)

@@ -228,7 +228,8 @@ async def company_source(request: AnalyseRequest) -> list[Card]:
     brand = request.item.brand or request.item.name or ""
     domain = request.item.url or ""
     result = await get_company_lookup()(brand, domain)
-    state = "found" if result.get("ch_number") else "not_found"
+    # "found" when we know who's behind it, even if no UK records could be joined.
+    state = "found" if result.get("ch_number") or result.get("parent") else "not_found"
     return [("company", state, result)]
 
 
