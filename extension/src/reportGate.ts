@@ -1,46 +1,86 @@
 /**
- * When the content script re-runs detection and which results it reports. Pure, so it can be
- * tested without a browser.
+ * When the content script re-runs detection and which results it reports. Pure apart from
+ * timers, so it can be tested without a browser.
  */
 import type { Detection } from "./detect";
 
-export interface Reported { url: string; detection: Detection }
+/** How long a "none" must last, on a URL that showed a purchase, before it is reported. */
+export const NONE_HOLD_MS = 5000;
+
+export type Decision =
+  | { send: Detection }
+  | { recheckInMs: number } // hold: run detection again after this delay
+  | null; // nothing to do
 
 /**
- * The detection to report now, or null to report nothing.
- *
- * - Same result as last time: nothing.
- * - Same URL, a purchase was reported and now there is none: nothing. Pages built with
- *   client-side frameworks remove and re-add their JSON-LD while they render (PrettyLittleThing
- *   drops it for about 2 s), so a "none" on the same URL is usually a re-render, not a new page.
- *   A real change of page comes with a new URL, which starts fresh.
+ * Decides which detections to report. Client-side frameworks can remove and re-add JSON-LD
+ * while they render (PrettyLittleThing drops it for about 2 s after load), so a "none" that
+ * follows a purchase on the same URL is held. It is reported only if it lasts `holdMs`.
+ * A real move away from the product (a single-page shop that keeps the URL, or that changed
+ * the URL before it removed the old product) still ends in "none", just `holdMs` later.
  */
-export function nextReport(prev: Reported | null, url: string, detection: Detection): Detection | null {
-  if (prev && prev.url === url) {
-    if (JSON.stringify(prev.detection) === JSON.stringify(detection)) return null;
-    if (prev.detection.status === "purchase" && detection.status === "none") return null;
+export class ReportGate {
+  private last: { url: string; key: string; status: Detection["status"] } | null = null;
+  private noneSince: number | null = null;
+
+  constructor(private readonly holdMs = NONE_HOLD_MS) {}
+
+  /** True while the last report for `url` was a purchase. */
+  hasPurchase(url: string): boolean {
+    return this.last?.url === url && this.last.status === "purchase";
   }
-  return detection;
+
+  decide(url: string, detection: Detection, now: number): Decision {
+    const key = JSON.stringify(detection);
+    if (this.last?.url === url && this.last.key === key) {
+      this.noneSince = null;
+      return null;
+    }
+    if (this.hasPurchase(url) && detection.status === "none") {
+      this.noneSince ??= now;
+      const left = this.holdMs - (now - this.noneSince);
+      if (left > 0) return { recheckInMs: left };
+    }
+    this.noneSince = null;
+    this.last = { url, key, status: detection.status };
+    return { send: detection };
+  }
+}
+
+export interface Debounced {
+  (ms?: number): void;
+  /** Drop any pending run and its deadline. */
+  cancel(): void;
 }
 
 /**
- * Debounce with a ceiling: `fn` runs `wait` ms after the last call, but never later than
- * `maxWait` ms after the first call in a burst. Some shops change their DOM many times a
- * second for as long as the page is open (Lakeland: about 22 changes a second, never quiet
- * for 600 ms), and a plain debounce would never fire there.
+ * Debounce with an optional ceiling: `fn` runs `wait` ms after the last call, and, while
+ * `maxWait()` returns a number, no later than that many ms after the first call in a burst.
+ * Some shops change their DOM many times a second (Lakeland: about 22 changes a second, never
+ * quiet for 600 ms), and a plain debounce would never run there.
  */
-export function debounceWithMaxWait(fn: () => void, wait: number, maxWait: number): (ms?: number) => void {
+export function debounceWithMaxWait(fn: () => void, wait: number, maxWait: () => number | null): Debounced {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let deadline: ReturnType<typeof setTimeout> | undefined;
-  const run = () => {
+  const cancel = () => {
     clearTimeout(timer);
     clearTimeout(deadline);
     timer = deadline = undefined;
+  };
+  const run = () => {
+    cancel();
     fn();
   };
-  return (ms = wait) => {
+  const call = (ms = wait) => {
     clearTimeout(timer);
     timer = setTimeout(run, ms);
-    deadline ??= setTimeout(run, Math.max(ms, maxWait));
+    const max = maxWait();
+    if (max === null) {
+      clearTimeout(deadline);
+      deadline = undefined;
+    } else {
+      deadline ??= setTimeout(run, Math.max(ms, max));
+    }
   };
+  return Object.assign(call, { cancel });
 }
