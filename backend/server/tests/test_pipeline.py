@@ -80,12 +80,12 @@ def use_llm(monkeypatch, fake: FakeLLM) -> FakeLLM:
     return fake
 
 
-async def stream(body: dict, install: str = INSTALL) -> list[tuple[float, dict | None]]:
+async def stream(body: dict, install: str = INSTALL, headers: dict | None = None) -> list[tuple[float, dict | None]]:
     """POST /analyse; return [(seconds since start, card event or None for done)]."""
     events: list[tuple[float, dict | None]] = []
     start = time.monotonic()
     async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as c:
-        async with c.stream("POST", "/analyse", json=body, headers={"X-Install-Id": install}) as resp:
+        async with c.stream("POST", "/analyse", json=body, headers={"X-Install-Id": install, **(headers or {})}) as resp:
             assert resp.status_code == 200
             name = None
             async for line in resp.aiter_lines():

@@ -38,7 +38,10 @@ async def test_second_request_for_the_same_domain_makes_no_llm_call(monkeypatch,
 async def test_repeat_visit_without_terms_is_served_from_the_site_cache(monkeypatch, tracker):
     llm = use_llm(monkeypatch, FakeLLM())
     tav = use_tavily(monkeypatch, FakeTavily([gym_result()]))
-    first = cards(await stream(REQUEST))
+    # The site cache is filled by the pre-warm run (server-fetched T&C), not by a visitor's text:
+    # see test_site_cache_is_never_filled_from_text_a_client_sent.
+    monkeypatch.setenv("SMALLPRINT_PREWARM_KEY", "s3cret")
+    first = cards(await stream(REQUEST, install="prewarm", headers={"X-Prewarm-Key": "s3cret"}))
 
     # Another product page on the same site; the extension sends no T&C this time.
     other_page = {**REQUEST, "item": {**REQUEST["item"], "url": "https://www.fitbox.example/join/premium"},
@@ -108,6 +111,27 @@ async def test_a_spend_limit_cut_off_is_not_cached(monkeypatch):
     assert llm.calls == 1 and second["cost"]["state"] == "found"
 
 
+# --- cache poisoning -----------------------------------------------------
+
+async def test_site_cache_is_never_filled_from_text_a_client_sent(monkeypatch, tracker):
+    """T&C text comes from the client, so one install must not be able to decide what every
+    other install sees for a site. The quotes in a poisoned entry verify against the text the
+    attacker supplied, never against the real page, so the verifier can't catch this."""
+    llm = use_llm(monkeypatch, FakeLLM())
+    poison = {**REQUEST, "item": {**REQUEST["item"], "url": "https://www.vodafone.co.uk/mobile/deals"},
+              "terms": [{"url": "https://attacker.example/not-vodafones-terms", "kind": "terms", "text": REQUEST["terms"][0]["text"]}]}
+    attacker = cards(await stream(poison, install="attacker"))
+    assert attacker["cost"]["state"] == "found"  # the attacker's own cards may use the attacker's own text
+    assert llm.calls == 1
+
+    # Another install on the same site, whose page offered no T&C to fetch.
+    victim = cards(await stream({**REQUEST, "item": {**REQUEST["item"], "url": "https://www.vodafone.co.uk/mobile/sim-only"},
+                                 "terms": []}, install="victim"))
+    for c in TERMS_CARDS:
+        assert victim[c]["state"] == "not_found", (c, victim[c]["payload"])
+    assert llm.calls == 1  # nothing to extract: no page text, no T&C
+
+
 # --- pre-warm access -----------------------------------------------------
 
 async def test_prewarm_key_gets_its_own_higher_limit(monkeypatch):
@@ -124,6 +148,30 @@ async def test_prewarm_key_gets_its_own_higher_limit(monkeypatch):
             body = "".join([chunk async for chunk in resp.aiter_text()])
     assert llm.calls == 1 and '"state": "found"' in body
     assert t.spent(main.PREWARM_INSTALL) > 0
+
+
+async def test_the_prewarm_install_id_without_the_key_is_refused(monkeypatch):
+    """"prewarm" is the server's own install: it gets the higher spend limit and its results are
+    trusted. A client that only sends that id in X-Install-Id must not inherit either."""
+    t = SpendTracker(daily_limit_usd=0.0)  # normal installs can't spend anything
+    monkeypatch.setattr(main, "get_spend_tracker", lambda: t)
+    monkeypatch.setenv("SMALLPRINT_PREWARM_KEY", "s3cret")
+    llm = use_llm(monkeypatch, FakeLLM())
+
+    from httpx import ASGITransport, AsyncClient
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as c:
+        async with c.stream("POST", "/analyse", json=REQUEST,
+                            headers={"X-Install-Id": "prewarm", "X-Prewarm-Key": "s3cret"}) as resp:
+            assert resp.status_code == 200
+            async for _ in resp.aiter_text():
+                pass
+        assert llm.calls == 1
+
+        # Different T&C text, so a cache hit can't hide an LLM call made on the spoofed id.
+        spoof = {**REQUEST, "terms": [{**REQUEST["terms"][0], "text": REQUEST["terms"][0]["text"] + "\nSpoofed."}]}
+        async with c.stream("POST", "/analyse", json=spoof, headers={"X-Install-Id": "prewarm"}) as resp:
+            assert resp.status_code == 403
+    assert llm.calls == 1, "the spoofed request must not reach the LLM on the pre-warm budget"
 
 
 @pytest.mark.parametrize("env,key", [(None, "anything"), ("s3cret", "wrong"), ("s3cret", None), ("", "")])

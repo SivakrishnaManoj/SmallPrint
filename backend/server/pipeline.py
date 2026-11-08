@@ -35,6 +35,10 @@ log = logging.getLogger(__name__)
 # Extraction must stream within ~20 s (CLAUDE.md); give up a little after that.
 TERMS_TIMEOUT_S = 25.0
 
+# The install id of scripts/prewarm.py. The server fetched those T&C pages itself, so their
+# extraction may fill the per-site cache. main.analyse only accepts it with the pre-warm key.
+PREWARM_INSTALL = "prewarm"
+
 
 def refill_enabled() -> bool:
     """Refill cost (S8) is gated: off unless SMALLPRINT_REFILL=1, set only if the H10 gate passes."""
@@ -166,8 +170,13 @@ async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncOp
             found_terms, limit_terms = site_fields, False
         else:
             found_terms, limit_terms = await extract_fields(client, term_docs, install_id, tracker, cache)
-            # Only a complete extraction becomes the site's entry (no refusals, no limit cut-off).
-            if cache and site and term_docs and not limit_terms and all(
+            # Only a complete extraction becomes the site's entry (no refusals, no limit cut-off),
+            # and only from text the server can vouch for: the pre-warm run's own fetches, or
+            # documents the server found itself (search). Text a client sent is served back to
+            # that client only. Otherwise one install could decide what every other install
+            # sees for a site, with quotes that verify against text the real page never had.
+            trusted = install_id == PREWARM_INSTALL or all(d.source for d in term_docs)
+            if cache and site and term_docs and trusted and not limit_terms and all(
                     cache.has_doc(d.url, d.text, d.source) for d in term_docs):
                 cache.put_site(site, found_terms)
 

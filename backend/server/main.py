@@ -27,7 +27,7 @@ from smallprint.tc_cache import TermsCache, cache as default_cache
 
 from .fixtures import pick_fixture
 from .models import AnalyseRequest, FlagCompanyMatchBody
-from .pipeline import stream_real
+from .pipeline import PREWARM_INSTALL, stream_real
 from .rate_limit import check as rate_check
 
 _llm_client: AsyncOpenAI | None = None
@@ -58,9 +58,6 @@ def get_search() -> TavilySearch | None:
 
 def get_cache() -> TermsCache:
     return default_cache
-
-
-PREWARM_INSTALL = "prewarm"
 
 
 def is_prewarm(key: str | None) -> bool:
@@ -233,6 +230,9 @@ async def analyse(
         # scripts/prewarm.py: its own install id and a higher daily limit, so ~50 sites fit.
         install_id = PREWARM_INSTALL
         tracker.set_limit(PREWARM_INSTALL, float(os.environ.get("SMALLPRINT_PREWARM_LIMIT_USD", "5.00")))
+    elif install_id == PREWARM_INSTALL:
+        # That id carries the higher limit and may fill the shared T&C cache: key holders only.
+        raise HTTPException(status_code=403, detail="X-Install-Id 'prewarm' needs the pre-warm key")
     if not install_id:
         raise HTTPException(status_code=422, detail="Missing X-Install-Id header")
     if not rate_check(install_id):
