@@ -1,6 +1,6 @@
 """S3 (#13): extractor tests. The LLM is faked at the network boundary.
 
-The real AsyncAnthropic client runs; only the HTTP transport is replaced,
+The real AsyncOpenAI client runs; only the HTTP transport is replaced,
 returning recorded Messages API responses. Done when: every `found` value
 has a verified quote and URL.
 """
@@ -15,7 +15,7 @@ import httpx2
 import jsonschema
 import pymupdf
 import pytest
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from smallprint.extract import Document, analyse_documents, chunk_text, html_to_text, pdf_b64_to_text
 from smallprint.extract.extractor import MAX_INPUT_TOKENS, MODEL, _number_in_quote, verify_extraction
@@ -30,17 +30,17 @@ GYM_URL = "https://fitbox.example/terms"
 RETAIL_URL = "https://retail.example/returns"
 
 
-def _message(text: str | None, stop_reason: str = "end_turn") -> dict:
+def _message(text: str | None, finish_reason: str = "stop", refusal: str | None = None) -> dict:
     return {
-        "id": "msg_test", "type": "message", "role": "assistant", "model": MODEL,
-        "content": [] if text is None else [{"type": "text", "text": text}],
-        "stop_reason": stop_reason, "stop_sequence": None,
-        "usage": {"input_tokens": 1, "output_tokens": 1},
+        "id": "c", "object": "chat.completion", "created": 0, "model": MODEL,
+        "choices": [{"index": 0, "finish_reason": finish_reason,
+                     "message": {"role": "assistant", "content": text, "refusal": refusal}}],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
     }
 
 
-class FakeAnthropic:
-    """Records each request body and replies with queued Messages API bodies."""
+class FakeOpenAI:
+    """Records each request body and replies with queued Chat Completions bodies."""
 
     def __init__(self, replies: list[dict]):
         self.replies = list(replies)
@@ -50,9 +50,9 @@ class FakeAnthropic:
         self.requests.append(json.loads(request.content))
         return httpx2.Response(200, json=self.replies.pop(0))
 
-    def client(self) -> AsyncAnthropic:
+    def client(self) -> AsyncOpenAI:
         transport = httpx2.MockTransport(self.handler)
-        return AsyncAnthropic(api_key="test", max_retries=0, http_client=httpx2.AsyncClient(transport=transport))
+        return AsyncOpenAI(api_key="test", max_retries=0, http_client=httpx2.AsyncClient(transport=transport))
 
 
 def _llm(name: str) -> str:
@@ -89,7 +89,7 @@ def _validate_against_contract(cards: dict) -> None:
 
 async def test_gym_terms_every_found_value_is_verified():
     source = (FIX / "gym_terms.txt").read_text(encoding="utf-8")
-    fake = FakeAnthropic([_message(_llm("gym_llm.json"))])
+    fake = FakeOpenAI([_message(_llm("gym_llm.json"))])
 
     cards = await analyse_documents(fake.client(), [Document(GYM_URL, source)])
 
@@ -118,7 +118,7 @@ async def test_gym_terms_every_found_value_is_verified():
 async def test_retail_html_page_via_trafilatura():
     html = (FIX / "retail_returns.html").read_text(encoding="utf-8")
     source = html_to_text(html)
-    fake = FakeAnthropic([_message(_llm("retail_llm.json"))])
+    fake = FakeOpenAI([_message(_llm("retail_llm.json"))])
 
     cards = await analyse_documents(fake.client(), [Document(RETAIL_URL, source)])
 
@@ -131,14 +131,14 @@ async def test_retail_html_page_via_trafilatura():
     assert cards["card_states"]["cost"] == "not_found"
     assert cards["card_states"]["lock_in"] == "not_found"
     # The text the model saw is the page's main text, not scripts or nav.
-    sent = fake.requests[0]["messages"][0]["content"]
+    sent = fake.requests[0]["messages"][1]["content"]
     assert "window.track" not in sent
 
 
 async def test_two_documents_keep_their_own_urls():
     gym = (FIX / "gym_terms.txt").read_text(encoding="utf-8")
     retail = html_to_text((FIX / "retail_returns.html").read_text(encoding="utf-8"))
-    fake = FakeAnthropic([_message(_llm("gym_llm.json")), _message(_llm("retail_llm.json"))])
+    fake = FakeOpenAI([_message(_llm("gym_llm.json")), _message(_llm("retail_llm.json"))])
 
     cards = await analyse_documents(fake.client(), [Document(GYM_URL, gym), Document(RETAIL_URL, retail)])
 
@@ -150,19 +150,19 @@ async def test_two_documents_keep_their_own_urls():
 
 # --- request shape -------------------------------------------------------
 
-async def test_request_uses_haiku_constrained_json_and_quote_rule():
+async def test_request_uses_constrained_json_and_quote_rule():
     source = (FIX / "gym_terms.txt").read_text(encoding="utf-8")
-    fake = FakeAnthropic([_message(_llm("gym_llm.json"))])
+    fake = FakeOpenAI([_message(_llm("gym_llm.json"))])
     await analyse_documents(fake.client(), [Document(GYM_URL, source)])
 
     body = fake.requests[0]
-    assert body["model"] == "claude-haiku-5-5"
-    fmt = body["output_config"]["format"]
-    assert fmt["type"] == "json_schema"
-    assert set(fmt["schema"]["required"]) >= {"monthly_price", "min_term_months", "returns_window"}
-    assert "return null" in body["system"]
-    assert "character for character" in body["system"]
-    assert '{"value": null, "quote": null}' in body["system"]  # worked example has a null field
+    assert body["model"] == "gpt-4o-mini"
+    fmt = body["response_format"]
+    assert fmt["type"] == "json_schema" and fmt["json_schema"]["strict"] is True
+    assert set(fmt["json_schema"]["schema"]["required"]) >= {"monthly_price", "min_term_months", "returns_window"}
+    assert "return null" in body["messages"][0]["content"]
+    assert "character for character" in body["messages"][0]["content"]
+    assert '{"value": null, "quote": null}' in body["messages"][0]["content"]  # worked example has a null field
 
 
 async def test_long_document_is_chunked_under_the_input_cap():
@@ -170,34 +170,34 @@ async def test_long_document_is_chunked_under_the_input_cap():
     source = "\n\n".join([para] * 40)  # ~40k chars, several chunks
     n_chunks = len(chunk_text(source, 6_000))
     empty = json.dumps({})
-    fake = FakeAnthropic([_message(empty)] * 20)
+    fake = FakeOpenAI([_message(empty)] * 20)
 
     await analyse_documents(fake.client(), [Document(GYM_URL, source)])
 
     assert len(fake.requests) >= n_chunks >= 2
     for body in fake.requests:
-        total = estimate_tokens(body["system"]) + estimate_tokens(json.dumps(body["output_config"])) \
-            + estimate_tokens(body["messages"][0]["content"])
+        total = estimate_tokens(body["messages"][0]["content"]) + estimate_tokens(json.dumps(body["response_format"])) \
+            + estimate_tokens(body["messages"][1]["content"])
         assert total <= MAX_INPUT_TOKENS
 
 
 # --- failure modes -------------------------------------------------------
 
 @pytest.mark.parametrize("reply", [
-    _message(None, stop_reason="refusal"),
-    _message('{"monthly_price": {"value": 29.99, "quote": "costs £29.99"', stop_reason="max_tokens"),
+    _message(None, refusal="I cannot help with that."),
+    _message('{"monthly_price": {"value": 29.99, "quote": "costs £29.99"', finish_reason="length"),
     _message("not json"),
 ])
 async def test_bad_llm_reply_gives_not_found_not_a_crash(reply):
     source = (FIX / "gym_terms.txt").read_text(encoding="utf-8")
-    fake = FakeAnthropic([reply])
+    fake = FakeOpenAI([reply])
     cards = await analyse_documents(fake.client(), [Document(GYM_URL, source)])
     assert cards["cost_streams"] == [] and cards["small_print"] == []
     assert set(cards["card_states"].values()) == {"not_found"}
 
 
 async def test_no_documents_gives_not_found():
-    cards = await analyse_documents(FakeAnthropic([]).client(), [])
+    cards = await analyse_documents(FakeOpenAI([]).client(), [])
     assert set(cards["card_states"].values()) == {"not_found"}
 
 

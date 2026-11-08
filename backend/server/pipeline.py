@@ -20,7 +20,7 @@ import logging
 import os
 from typing import AsyncGenerator, Awaitable, Callable
 
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from smallprint.extract import Document, build_cards, extract_fields, html_to_text, pdf_b64_to_text
 from smallprint.refill import find_refill
@@ -124,7 +124,7 @@ async def fallback_documents(request: AnalyseRequest, search: TavilySearch | Non
     return docs
 
 
-async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncAnthropic,
+async def terms_source(request: AnalyseRequest, install_id: str, client: AsyncOpenAI,
                        tracker: SpendTracker, search: TavilySearch | None = None,
                        cache: TermsCache | None = None) -> list[Card]:
     site = site_of(request.item.url)
@@ -212,7 +212,7 @@ def _event(card: Card) -> dict:
     return {"event": "card", "data": json.dumps({"card": name, "state": state, "payload": payload})}
 
 
-async def stream_real(request: AnalyseRequest, install_id: str, client: AsyncAnthropic,
+async def stream_real(request: AnalyseRequest, install_id: str, client: AsyncOpenAI,
                       tracker: SpendTracker, search: TavilySearch | None = None,
                       cache: TermsCache | None = None) -> AsyncGenerator[dict, None]:
     sources: list[tuple[tuple[str, ...], Callable[[], Awaitable[list[Card]]]]] = [

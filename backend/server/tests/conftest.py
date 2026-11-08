@@ -24,11 +24,11 @@ def no_card_delay(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def mock_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Never call the real Anthropic API from tests, even if a developer has a key set.
+    """Never call the real OpenAI API from tests, even if a developer has a key set.
 
     Real-pipeline tests opt in by patching main.get_llm_client with a faked client.
     """
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.setattr(main, "_llm_client", None)
     monkeypatch.setattr(main, "_search", None)

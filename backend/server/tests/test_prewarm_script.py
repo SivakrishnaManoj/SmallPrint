@@ -79,8 +79,12 @@ def test_prewarm_run_fills_the_cache(monkeypatch, tmp_path, tracker, capsys):
     with TestClient(main.app) as app_client:
         handler, _ = _site_transport(app_client)
         real_client = httpx.Client
-        monkeypatch.setattr(prewarm.httpx, "Client",
-                            lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))
+
+        class MockedClient(real_client):  # a subclass, so isinstance(x, httpx.Client) still works
+            def __init__(self, **kw):
+                super().__init__(transport=httpx.MockTransport(handler), **kw)
+
+        monkeypatch.setattr(prewarm.httpx, "Client", MockedClient)
         out = tmp_path / "results.csv"
         assert prewarm.main(["--server", "http://test", "--list", str(lst), "--out", str(out)]) == 0
 

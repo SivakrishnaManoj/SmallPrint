@@ -10,7 +10,7 @@ import jsonschema
 import pytest
 
 from smallprint.extract import Document, analyse_documents
-from smallprint.extract.tests.test_extractor import FIX, GYM_URL, FakeAnthropic, _llm
+from smallprint.extract.tests.test_extractor import FIX, GYM_URL, FakeOpenAI, _llm
 from smallprint.spend import (
     MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS, SpendLimitReached, SpendTracker, TokenCapExceeded, call_cost,
 )
@@ -24,9 +24,11 @@ B = "install-bbbb-2222"
 
 def _reply(text: str, input_tokens: int = 7_000, output_tokens: int = 1_000) -> dict:
     return {
-        "id": "msg_test", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
-        "content": [{"type": "text", "text": text}], "stop_reason": "end_turn", "stop_sequence": None,
-        "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
+        "id": "c", "object": "chat.completion", "created": 0, "model": "gpt-4o-mini",
+        "choices": [{"index": 0, "finish_reason": "stop",
+                     "message": {"role": "assistant", "content": text, "refusal": None}}],
+        "usage": {"prompt_tokens": input_tokens, "completion_tokens": output_tokens,
+                  "total_tokens": input_tokens + output_tokens},
     }
 
 
@@ -41,20 +43,20 @@ async def test_limit_stops_llm_calls_for_one_install_not_another():
     tracker = SpendTracker(daily_limit_usd=0.005)  # room for ~3 calls
     doc = [Document(GYM_URL, _long_doc())]
 
-    fake_a = FakeAnthropic([_reply("{}")] * 50)
+    fake_a = FakeOpenAI([_reply("{}")] * 50)
     cards_a = await analyse_documents(fake_a.client(), doc, A, tracker)
     calls_a = len(fake_a.requests)
     assert 0 < calls_a < 10, "A should be cut off after a few calls, not process every chunk"
     assert set(cards_a["card_states"].values()) == {"limit_reached"}
 
     # A again, same day: no LLM call at all.
-    fake_a2 = FakeAnthropic([_reply("{}")] * 50)
+    fake_a2 = FakeOpenAI([_reply("{}")] * 50)
     cards_a2 = await analyse_documents(fake_a2.client(), doc, A, tracker)
     assert fake_a2.requests == []
     assert set(cards_a2["card_states"].values()) == {"limit_reached"}
 
     # B is unaffected.
-    fake_b = FakeAnthropic([_reply("{}")] * 50)
+    fake_b = FakeOpenAI([_reply("{}")] * 50)
     await analyse_documents(fake_b.client(), doc, B, tracker)
     assert len(fake_b.requests) == calls_a
     assert tracker.spent(A) <= tracker.daily_limit_usd
@@ -65,7 +67,7 @@ async def test_values_verified_before_the_limit_still_show():
     tracker = SpendTracker(daily_limit_usd=0.003)  # one call, then the limit
     source = (FIX / "gym_terms.txt").read_text(encoding="utf-8")
     docs = [Document(GYM_URL, source), Document("https://other.example/terms", source)]
-    fake = FakeAnthropic([_reply(_llm("gym_llm.json"))] * 5)
+    fake = FakeOpenAI([_reply(_llm("gym_llm.json"))] * 5)
 
     cards = await analyse_documents(fake.client(), docs, A, tracker)
 
@@ -75,7 +77,7 @@ async def test_values_verified_before_the_limit_still_show():
 
 
 async def test_without_a_tracker_nothing_is_limited():
-    fake = FakeAnthropic([_reply("{}")] * 50)
+    fake = FakeOpenAI([_reply("{}")] * 50)
     cards = await analyse_documents(fake.client(), [Document(GYM_URL, _long_doc())])
     assert len(fake.requests) > 10
     assert "limit_reached" not in cards["card_states"].values()

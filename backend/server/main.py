@@ -1,7 +1,7 @@
 """FastAPI server for SmallPrint /analyse endpoint.
 
 POST /analyse  — streams SSE card events. Real pipeline (server/pipeline.py) when
-                 ANTHROPIC_API_KEY is set; otherwise the fixtures (mock mode).
+                 OPENAI_API_KEY is set; otherwise the fixtures (mock mode).
 GET  /health   — liveness check
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ import random
 import secrets
 from typing import AsyncGenerator
 
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
@@ -27,14 +27,14 @@ from .models import AnalyseRequest
 from .pipeline import stream_real
 from .rate_limit import check as rate_check
 
-_llm_client: AsyncAnthropic | None = None
+_llm_client: AsyncOpenAI | None = None
 
 
-def get_llm_client() -> AsyncAnthropic | None:
-    """The Anthropic client, or None in mock mode (no ANTHROPIC_API_KEY)."""
+def get_llm_client() -> AsyncOpenAI | None:
+    """The OpenAI client, or None in mock mode (no OPENAI_API_KEY)."""
     global _llm_client
-    if _llm_client is None and os.environ.get("ANTHROPIC_API_KEY"):
-        _llm_client = AsyncAnthropic()
+    if _llm_client is None and os.environ.get("OPENAI_API_KEY"):
+        _llm_client = AsyncOpenAI()
     return _llm_client
 
 
