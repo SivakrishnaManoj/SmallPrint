@@ -8,8 +8,7 @@ import { ItemCard } from "./components/ItemCard";
 import { CostCard } from "./components/CostCard";
 import { StatutoryRights } from "./components/StatutoryRights";
 import { PriceDriftCard } from "./components/PriceDriftCard";
-import { LockInCard } from "./components/LockInCard";
-import { SmallPrintCard } from "./components/SmallPrintCard";
+import { TermsAccordion } from "./components/TermsAccordion";
 import { CompanyCard } from "./components/CompanyCard";
 import { FirstRunForm } from "./components/FirstRunForm";
 import { SERVER_URL } from "./config";
@@ -114,6 +113,11 @@ export function App() {
 
   const noPurchase = cards.item?.state === "n_a";
 
+  const termsLockIn = (cards.lock_in?.state === "found" || cards.lock_in?.state === "estimated")
+    ? cards.lock_in.payload : null;
+  const termsSmallPrint = (cards.small_print?.state === "found" || cards.small_print?.state === "estimated")
+    ? (cards.small_print.payload ?? []) : [];
+
   return (
     <div class="panel">
       <div class="dev-harness">
@@ -164,14 +168,9 @@ export function App() {
                 <PriceDriftCard priceDrift={cards.price_drift.payload} state={cards.price_drift.state} />
               </CardErrorBoundary>
             )}
-            {cards.lock_in && (
-              <CardErrorBoundary name="lock_in">
-                <LockInCard lockIn={cards.lock_in.payload} state={cards.lock_in.state} />
-              </CardErrorBoundary>
-            )}
-            {cards.small_print && (
-              <CardErrorBoundary name="small_print">
-                <SmallPrintCard items={cards.small_print.payload ?? []} state={cards.small_print.state} />
+            {(termsLockIn || termsSmallPrint.length > 0) && (
+              <CardErrorBoundary name="terms">
+                <TermsAccordion lockIn={termsLockIn} smallPrint={termsSmallPrint} />
               </CardErrorBoundary>
             )}
             {cards.company && (
