@@ -16,6 +16,7 @@
         "brand":  { "type": ["string", "null"] },
         "price":  { "type": ["number", "null"] },
         "seller": { "type": ["string", "null"] },
+        "manufacturer": { "type": ["string", "null"], "description": "As the page states it (e.g. Amazon's Manufacturer row). Optional." },
         "url":    { "type": "string", "format": "uri" },
         "id":     { "type": ["string", "null"] }
       }

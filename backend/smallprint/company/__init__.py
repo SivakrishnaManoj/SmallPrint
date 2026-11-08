@@ -26,6 +26,12 @@ Chain (each step only runs if the previous found nothing):
      the brand and then the parent's name.  Accepts only when a result's title
      is a case-insensitive exact match.
 
+The page's manufacturer (Amazon's "Manufacturer" row, or JSON-LD) is used two ways,
+both exact: its legal name is tried first at GLEIF and Companies House ("Ltd" and
+"Limited" count as the same), and when several Wikidata items share the brand name it
+picks the one whose own or parent name it starts with ("Unilever UK Ltd" picks Dove
+the Unilever brand over Dove the Mars chocolate).
+
 No fuzzy matching at any step.  When the owner is found but no UK company
 number is, the owner and how it was matched are still returned, with no
 records: hiding a known owner would be less honest than saying none matched.
@@ -66,6 +72,47 @@ GLEIF_COMPANIES_HOUSE_RA = "RA000585"
 _MAX_PARENT_HOPS = 3
 _CH_NUMBER_RE = re.compile(r"^(?:[A-Z]{2}\d{6}|\d{8})$")
 _LEI_RE = re.compile(r"^[A-Z0-9]{18}\d{2}$")
+
+
+_LEGAL_FORMS = {"limited", "plc", "inc", "llc", "llp", "lp", "corporation", "corp", "company", "co",
+                "gmbh", "ag", "sa", "sas", "bv", "nv", "spa", "srl", "ab", "as", "oy", "kk", "pty"}
+
+
+def legal_name_key(name: str | None) -> str:
+    """A company's legal name for exact comparison: case, punctuation, "&"/"and" and
+    "Ltd"/"Limited" don't matter; every word still has to match.
+
+    "Sony Interactive Entertainment Europe Ltd" and "SONY INTERACTIVE ENTERTAINMENT
+    EUROPE LIMITED" give the same key; "Unilever UK & CN Holdings Limited" does not
+    match "Unilever UK Limited".
+    """
+    s = re.sub(r"[\u200e\u200f]", "", name or "").casefold().replace("&", " and ")
+    words = re.sub(r"[^\w\s]", " ", s).split()
+    return " ".join("limited" if w == "ltd" else w for w in words)
+
+
+def _owner_key(name: str | None) -> str:
+    """Legal-name key without the trailing legal form ("Unilever UK Limited" → "unilever uk")."""
+    words = legal_name_key(name).split()
+    while words and words[-1] in _LEGAL_FORMS:
+        words.pop()
+    return " ".join(words)
+
+
+def _made_by(manufacturer: str, company_label: str | None) -> bool:
+    """The page's manufacturer is this company or a company named after it, whole words only.
+
+    "Unilever UK Ltd" → Unilever (yes); "Sony Interactive Entertainment Europe Ltd" →
+    Sony Interactive Entertainment (yes); "Unileverage Ltd" → Unilever (no).
+    """
+    m, c = _owner_key(manufacturer), _owner_key(company_label)
+    return bool(m and c) and (m == c or m.startswith(c + " "))
+
+
+def tidy_manufacturer(raw: str | None) -> str:
+    """Strip direction marks, colons and spaces around a manufacturer value."""
+    s = re.sub(r"[\u200e\u200f]", "", raw or "")
+    return re.sub(r"\s+", " ", s).strip(" :")
 
 
 def clean_brand(raw: str | None) -> str:
@@ -202,8 +249,31 @@ async def _wd_entities(http: httpx.AsyncClient, ids: list[str]) -> dict[str, dic
     return {k: v for k, v in (resp.json().get("entities") or {}).items() if "missing" not in v}
 
 
+def _substantial(entities: dict[str, dict]) -> dict[str, dict]:
+    return {
+        q: e for q, e in entities.items()
+        if not _is_human(e) and (_claim_values(e, "P2622") or _parent_ids(e) or _site_hosts(e))
+    }
+
+
+async def _pick_by_manufacturer(http: httpx.AsyncClient, candidates: dict[str, dict], manufacturer: str) -> str | None:
+    """Of several same-name items, the one the page's manufacturer names (itself or its parent).
+
+    Only decides when exactly one candidate fits; otherwise it is still ambiguous.
+    """
+    cands = _substantial(candidates)
+    parent_ids = list(dict.fromkeys(p for e in cands.values() for p in _parent_ids(e)))[:50]
+    parents = await _wd_entities(http, parent_ids) if parent_ids else {}
+    fits = [
+        q for q, e in cands.items()
+        if _made_by(manufacturer, _entity_label(e))
+        or any(_made_by(manufacturer, _entity_label(parents[p])) for p in _parent_ids(e) if p in parents)
+    ]
+    return fits[0] if len(fits) == 1 else None
+
+
 async def _wikidata_lookup(
-    http: httpx.AsyncClient, brand: str, domain: str,
+    http: httpx.AsyncClient, brand: str, domain: str, manufacturer: str = "",
 ) -> tuple[str | None, str | None, str | None, str | None]:
     """Return (parent_name, ch_number, match_via, parent_lei), or all None.
 
@@ -238,6 +308,13 @@ async def _wikidata_lookup(
         qid = _pick_candidate(by_label, domain) if by_label else None
         if qid is None:
             qid = _pick_candidate(entities, domain)
+        via = "Wikidata"
+        if qid is None and manufacturer:
+            # Several items share the name (Dove soap, Dove chocolate): the page's manufacturer decides.
+            qid = (await _pick_by_manufacturer(http, by_label, manufacturer) if by_label else None) \
+                or await _pick_by_manufacturer(http, entities, manufacturer)
+            if qid:
+                via = "Wikidata, told apart by the page's manufacturer"
         if qid is None:
             return None, None, None, None
 
@@ -247,7 +324,6 @@ async def _wikidata_lookup(
         parent_name: str | None = None
         parent_entity: dict | None = None
         ch = own_ch
-        via = "Wikidata"
 
         # Walk up (breadth-first, at most _MAX_PARENT_HOPS levels) until some
         # ancestor has a Companies House number.
@@ -323,27 +399,31 @@ async def _gleif_lookup(http: httpx.AsyncClient, brand: str) -> tuple[str | None
     whose legal name equals the brand exactly (case-insensitive) and that is
     registered at Companies House (RA000585).  The CH number is ``registeredAs``.
     """
-    try:
-        resp = await http.get(
-            f"{GLEIF_API}/lei-records",
-            params={
-                "filter[entity.legalName]": brand,
-                "filter[entity.legalAddress.country]": "GB",
-                "page[size]": 10,
-            },
-            headers={"Accept": "application/vnd.api+json"},
-            timeout=TIMEOUT_S,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    except (httpx.HTTPError, ValueError):
-        log.debug("gleif lookup failed for %s", brand)
-        return None, None
+    # GLEIF's name filter wants the legal form spelled out: "Ltd" finds nothing, "Limited" does.
+    spellings = list(dict.fromkeys([brand, re.sub(r"\bLtd\b\.?", "Limited", brand, flags=re.I)]))
+    data: dict = {"data": []}
+    for spelling in spellings:
+        try:
+            resp = await http.get(
+                f"{GLEIF_API}/lei-records",
+                params={
+                    "filter[entity.legalName]": spelling,
+                    "filter[entity.legalAddress.country]": "GB",
+                    "page[size]": 10,
+                },
+                headers={"Accept": "application/vnd.api+json"},
+                timeout=TIMEOUT_S,
+            )
+            resp.raise_for_status()
+            data["data"] += resp.json().get("data") or []
+        except (httpx.HTTPError, ValueError):
+            log.debug("gleif lookup failed for %s", spelling)
 
+    wanted = legal_name_key(brand)
     for item in data.get("data") or []:
         entity = (item.get("attributes") or {}).get("entity") or {}
         name = ((entity.get("legalName") or {}).get("name") or "").strip()
-        if name.casefold() != brand.casefold():
+        if legal_name_key(name) != wanted:
             continue
         if ((entity.get("registeredAt") or {}).get("id")) != GLEIF_COMPANIES_HOUSE_RA:
             continue
@@ -377,7 +457,7 @@ async def _ch_lookup(http: httpx.AsyncClient, brand: str, api_key: str) -> tuple
     for item in (data.get("items") or []):
         title = (item.get("title") or "").strip()
         number = (item.get("company_number") or "").strip()
-        if title.casefold() == brand.casefold() and number:
+        if legal_name_key(title) == legal_name_key(brand) and number:
             return title, number
     return None, None
 
@@ -426,6 +506,7 @@ async def company_lookup(
     http: httpx.AsyncClient | None = None,
     db_path: Path | None = None,
     ch_api_key: str | None = None,
+    manufacturer: str | None = None,
 ) -> dict:
     """Brand → parent → CH number.  Returns the company dict for the response schema.
 
@@ -433,6 +514,7 @@ async def company_lookup(
     Production callers pass nothing; defaults come from env / filesystem.
     """
     brand = clean_brand(brand)
+    manufacturer = tidy_manufacturer(manufacturer)
     if not brand:
         return _not_identified("")
 
@@ -450,7 +532,7 @@ async def company_lookup(
     try:
         # --- Step 1: Wikidata ---
         try:
-            parent, ch, via, parent_lei = await asyncio.wait_for(_wikidata_lookup(http, brand, domain), WIKIDATA_BUDGET_S)
+            parent, ch, via, parent_lei = await asyncio.wait_for(_wikidata_lookup(http, brand, domain, manufacturer), WIKIDATA_BUDGET_S)
         except asyncio.TimeoutError:
             log.debug("wikidata lookup timed out for brand=%s", brand)
             parent, ch, via, parent_lei = None, None, None, None
@@ -463,8 +545,17 @@ async def company_lookup(
                 via = f"{via}, then GLEIF: {uk_name}" if via and uk_name else "GLEIF"
                 parent = parent or uk_name
 
-        # Exact names to try at GLEIF and Companies House: the brand, then the parent.
-        names = list(dict.fromkeys(n for n in (brand, parent) if n))
+        # Exact names to try at GLEIF and Companies House: the page's manufacturer (often
+        # the UK company itself), then the brand, then the parent.
+        names = list(dict.fromkeys(n for n in (manufacturer, brand, parent) if n))
+
+        def describe(source: str, name: str, legal_name: str | None) -> str:
+            if name == manufacturer:
+                found = f"UK company from the page's manufacturer ({source}): {legal_name or name}"
+                return f"{via}; {found}" if via else found
+            if name == brand:
+                return source if source == "GLEIF" else f"{source} exact name"
+            return f"{via}, then {source} exact name"
 
         # --- Step 2b: GLEIF (exact legal name) ---
         for name in names:
@@ -472,9 +563,9 @@ async def company_lookup(
                 break
             gleif_parent, gleif_ch = await _gleif_lookup(http, name)
             if gleif_ch:
+                via = describe("GLEIF", name, gleif_parent)
                 parent = parent or gleif_parent
                 ch = gleif_ch
-                via = "GLEIF" if name == brand else f"{via}, then GLEIF exact name"
 
         # --- Step 3: Companies House exact name ---
         for name in names:
@@ -482,9 +573,9 @@ async def company_lookup(
                 break
             ch_name, ch_num = await _ch_lookup(http, name, ch_api_key)
             if ch_num:
+                via = describe("Companies House", name, ch_name)
                 parent = parent or ch_name
                 ch = ch_num
-                via = "Companies House exact name" if name == brand else f"{via}, then Companies House exact name"
 
         if not ch:
             if parent:

@@ -18,7 +18,7 @@ def _request(brand: str) -> AnalyseRequest:
     ({"brand": "Unknown", "parent": None, "ch_number": None, "match_via": "Brand not identified", "records": []}, "not_found"),
 ])
 async def test_company_card_state(monkeypatch, result, state):
-    async def fake_lookup(brand, domain):
+    async def fake_lookup(brand, domain, **_):
         return result
     monkeypatch.setattr(pipeline, "get_company_lookup", lambda: fake_lookup)
     [(name, got, payload)] = await pipeline.company_source(_request("Pepsi Max"))
@@ -34,7 +34,7 @@ _FIXTURE = {"company": {"brand": "SodaStream", "parent": "PepsiCo (MOCK)", "reco
 
 async def test_mock_mode_uses_the_real_company_lookup(monkeypatch):
     owner = {"brand": "Pepsi", "parent": "PepsiCo", "ch_number": None, "match_via": "Wikidata", "records": []}
-    async def fake_lookup(brand, domain):
+    async def fake_lookup(brand, domain, **_):
         assert brand == "Pepsi"
         return owner
     monkeypatch.setattr(pipeline, "get_company_lookup", lambda: fake_lookup)
