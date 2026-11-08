@@ -90,12 +90,30 @@ function pageName(doc: Document, siteName: string | null): string | null {
   return parts.join(" - ") || null;
 }
 
+/**
+ * The words of `text` that spell one of the host's labels, longest run first:
+ * "Join PureGym" on www.puregym.com → "PureGym". Null if no run of words matches.
+ */
+function wordsSpellingHost(text: string, url: URL): string | null {
+  const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const labels = new Set(url.hostname.toLowerCase().split(".").filter((l) => l.length >= 3 && !["www", "com", "net", "org"].includes(l)));
+  const words = text.split(/\s+/).filter(Boolean);
+  for (let len = words.length; len >= 1; len--) {
+    for (let i = 0; i + len <= words.length; i++) {
+      const run = words.slice(i, i + len).join(" ");
+      if (labels.has(squash(run))) return run;
+    }
+  }
+  return null;
+}
+
 /** Site/brand name: og:site_name, else the title suffix, else the domain's main label. */
 function siteName(doc: Document, url: URL): string | null {
   const og = meta(doc, "og:site_name", "application-name");
   if (og) return og;
   const parts = clean(doc.title).split(/\s+[|–—-]\s+/);
-  if (parts.length > 1) return parts.at(-1)!;
+  // A title suffix can carry a call to action ("Join PureGym"): keep only the words that spell the domain.
+  if (parts.length > 1) return wordsSpellingHost(parts.at(-1)!, url) ?? parts.at(-1)!;
   const label = url.hostname.replace(/^www\./, "").split(".")[0];
   return label ? label[0].toUpperCase() + label.slice(1) : null;
 }

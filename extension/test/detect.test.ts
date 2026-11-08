@@ -63,6 +63,21 @@ describe("what each detector finds", () => {
     expect(d.request.links.map((l) => l.kind)).toEqual(["terms", "subscription", "cancel", "privacy"]);
   });
 
+  it("brand from the title suffix keeps only the words that spell the domain", () => {
+    const page = (title: string, url: string, head = "") => {
+      const d = detectPurchase(url, html("<main><p>Membership from £30.99 a month. Cancel any time.</p></main>", `<title>${title}</title>${head}`));
+      return d.status === "purchase" ? d.request.item : null;
+    };
+    // Live puregym.com/join/ (no og:site_name): the suffix was taken whole as the brand.
+    expect(page("Choose Your Gym | Join PureGym", "https://www.puregym.com/join/")).toMatchObject({ brand: "PureGym", seller: "PureGym", name: "Choose Your Gym" });
+    // A suffix that is all brand stays whole.
+    expect(page("Join today | The Gym Group", "https://www.thegymgroup.com/join/")?.brand).toBe("The Gym Group");
+    // No words spell the domain: keep the suffix as before.
+    expect(page("Plans | Fitness First", "https://www.example-gyms.co.uk/join")?.brand).toBe("Fitness First");
+    // An explicit og:site_name is never trimmed.
+    expect(page("Choose Your Gym | Join PureGym", "https://www.puregym.com/join/", '<meta property="og:site_name" content="Join PureGym">')?.brand).toBe("Join PureGym");
+  });
+
   it("checkout: badge on, contract + subscription, contract summary found, no personal data", () => {
     const d = run("checkout");
     expect(d).toMatchObject({ status: "purchase", detector: "wording", checkout: true });
