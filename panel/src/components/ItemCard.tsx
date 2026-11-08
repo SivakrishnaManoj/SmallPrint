@@ -11,7 +11,7 @@ export function ItemCard({ item, state, purchaseTypes }: Props) {
   if (state === "n_a") {
     return (
       <CardShell title="Purchase" state="n_a">
-        <p class="muted">No purchase detected on this page. Try a product, subscription or checkout page.</p>
+        <p class="muted">No purchase detected on this page — try a product, subscription or checkout page.</p>
       </CardShell>
     );
   }

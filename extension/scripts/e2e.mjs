@@ -24,6 +24,7 @@ const PAGES = {
   product: ["amazon-product", "https://www.amazon.co.uk/SodaStream-Terra-Sparkling-Water-Maker/dp/B09ABC1234"],
   checkout: ["checkout", "https://www.fernline.co.uk/checkout/review"],
   article: ["no-purchase-article", "https://www.themoneycolumn.co.uk/2026/10/are-subscriptions-worth-it"],
+  spa: ["spa-shop", "https://www.hollinhome.co.uk/p/kettle-one"],
 };
 
 const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "sp-e2e-")), {
@@ -214,14 +215,58 @@ try {
   check((await tc.getByRole("alert").count()) === 0, "backend accepted the request with terms (no error)");
   if (process.env.CAPTURE_DIR && tcBody) writeFileSync(join(process.env.CAPTURE_DIR, "request-with-terms.json"), JSON.stringify(tcBody));
 
-  // A page with no purchase: the panel says so and offers the demo.
-  const none = await open(server, article.tabId);
+  // W7: toolbar button state per tab.
+  const title = (tabId) => sw.evaluate((tabId) => chrome.action.getTitle({ tabId }), tabId);
+  check(/no purchase detected/.test(await title(article.tabId)), "non-purchase page: toolbar icon greyed (title says no purchase)");
+  check(/purchase found/.test(await title(product.tabId)), "purchase page: toolbar icon in colour");
+
+  // W7: a page with no purchase shows one card with the exact wording, and never a spinner.
+  const none = await ctx.newPage();
+  // Watch from before the panel's first render: any spinner, however brief, is recorded.
+  await none.addInitScript(() => {
+    window.__spinnerSeen = false;
+    new MutationObserver(() => {
+      if (document.querySelector('[data-testid="progress"], .spinner')) window.__spinnerSeen = true;
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await none.goto(`chrome-extension://${id}/sidepanel.html?tabId=${article.tabId}`);
   await none.getByTestId("no-purchase").waitFor({ timeout: 10000 });
-  check((await none.getByTestId("progress").count()) === 0, "no-purchase page: 'No purchase detected', no spinner");
+  await none.waitForTimeout(2000);
+  const cardsShown = await none.locator("section.card").allInnerTexts();
+  check(cardsShown.length === 1 && cardsShown[0].includes("No purchase detected on this page — try a product, subscription or checkout page."),
+    `non-purchase page: exactly one card with the ticket's wording (${cardsShown.length} card)`);
+  check((await none.evaluate(() => window.__spinnerSeen)) === false, "non-purchase page never showed a spinner, not even briefly");
+  // Self-test: the watcher really does notice a spinner (so the check above can fail).
+  const watcherWorks = await none.evaluate(async () => {
+    const el = Object.assign(document.createElement("div"), { className: "spinner" });
+    document.body.append(el);
+    await new Promise((r) => setTimeout(r, 50));
+    el.remove();
+    return window.__spinnerSeen;
+  });
+  check(watcherWorks === true, "spinner watcher self-test: an inserted spinner is detected");
+  check((await none.getByText("Try the demo purchase").count()) === 0, "no demo button in release builds");
   if (shots) await none.screenshot({ path: join(shots, "no-purchase.png") });
-  await none.getByText("Try the demo purchase").click();
-  await none.locator(".card__title").first().waitFor({ timeout: 10000 });
-  check(true, "demo button runs the canned request");
+
+  // W7: a single-page shop switches product without reloading; the panel follows.
+  const spa = await visit("spa");
+  const spaPosts = [];
+  const onSpa = (r) => { if (r.url() === `${server}/analyse` && r.method() === "POST") spaPosts.push(r.postDataJSON()); };
+  ctx.on("request", onSpa);
+  const spaPanel = await open(server, spa.tabId);
+  await spaPanel.locator(".card__title").first().waitFor({ timeout: 15000 });
+  const firstName = spaPosts.at(-1)?.item?.name;
+  await spa.tab.click("#next"); // history.pushState + re-render, no page load
+  const t2 = Date.now();
+  for (; Date.now() - t2 < 10000 && !spaPosts.some((b) => b.item?.name?.includes("Toaster")); ) await spaPanel.waitForTimeout(100);
+  const switched = spaPosts.find((b) => b.item?.name?.includes("Toaster"));
+  check(firstName?.includes("Kettle") && !!switched && spa.tab.url().endsWith("/p/toaster-two"),
+    `SPA product switch re-detected and re-analysed without a reload (${firstName} → ${switched?.item?.name}, ${Date.now() - t2}ms)`);
+  await spaPanel.getByTestId("progress").waitFor({ state: "detached", timeout: 15000 });
+  const spaDetection = await sw.evaluate((k) => chrome.storage.session.get(k).then((r) => r[k]), `detection:${spa.tabId}`);
+  check(spaDetection?.detection?.request?.item?.name?.includes("Toaster") && spaDetection.url.endsWith("/p/toaster-two"),
+    "panel's stored detection now holds the new product and URL");
+  ctx.off("request", onSpa);
 
   // Unreachable server
   const bad = await open("http://127.0.0.1:9");
