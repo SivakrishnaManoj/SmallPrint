@@ -1,6 +1,6 @@
-# `POST /analyse` request (proposal, S2 #3)
+# `POST /analyse` request
 
-Needs a thumbs-up from Sweta (extension) and Johann (schema, #2). The machine-readable version is `contracts/request.schema.json`.
+The machine-readable version is `contracts/request.schema.json`.
 
 ## Headers
 
@@ -19,7 +19,7 @@ Needs a thumbs-up from Sweta (extension) and Johann (schema, #2). The machine-re
   "purchase_type_signals": ["subscription"],
   "links": [{"url": "https://help.netflix.com/legal/termsofuse", "text": "Terms of Use", "kind": "terms"}],
   "page_text_snippets": ["Cancel anytime."],
-  "price_drift": {"first_seen": null, "current": 4.99},
+  "price_drift": {"first_seen": null, "current": null},
   "terms": [
     {"url": "https://help.netflix.com/legal/termsofuse", "text": "<T&C page text>"},
     {"url": "https://example.com/contract.pdf", "pdf_b64": "<base64 PDF bytes>"},
@@ -35,7 +35,7 @@ Needs a thumbs-up from Sweta (extension) and Johann (schema, #2). The machine-re
 | `links` | T&C, returns, cancel and similar links found on the page. |
 | `page_text_snippets` | Page text the extension thinks is relevant (offer, price, terms wording). |
 | `terms` | T&C documents fetched in the user's browser. HTML pages send `text`, PDFs send `pdf_b64`, and a failed fetch sends `fetch_failed: true` with no content (the backend then falls back to Tavily and labels the card). |
-| `price_drift` | Being removed in V1 (#29): price-drift data must not leave the browser. |
+| `price_drift` | Being removed in V1 (#29): price-drift data must not leave the browser. The schema still requires the field until #45 removes it, so send both values as `null`. |
 
 ## Response
 
