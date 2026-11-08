@@ -699,3 +699,112 @@ async def test_alias_match_still_used_when_no_label_match_qualifies(db):
     async with http:
         result = await company_lookup("BT", "bt.com", http=http, db_path=db, ch_api_key="")
     assert result["ch_number"] == "04190816"
+
+
+# ---------------------------------------------------------------------------
+# The page's manufacturer (Amazon "Manufacturer" row): exact UK company, and the
+# tie-break between brands that share a name.  Cases from live testing.
+# ---------------------------------------------------------------------------
+
+from smallprint.company import _made_by, legal_name_key, tidy_manufacturer  # noqa: E402
+
+
+@pytest.mark.parametrize("a,b,same", [
+    ("Sony Interactive Entertainment Europe Ltd", "SONY INTERACTIVE ENTERTAINMENT EUROPE LIMITED", True),
+    ("Unilever UK Ltd.", "UNILEVER UK LIMITED", True),
+    ("Marks & Spencer plc", "MARKS AND SPENCER PLC", True),
+    ("Unilever UK Limited", "UNILEVER UK & CN HOLDINGS LIMITED", False),
+    ("Sony Ltd", "Sony Europe Ltd", False),
+])
+def test_legal_name_key(a, b, same):
+    assert (legal_name_key(a) == legal_name_key(b)) is same
+
+
+@pytest.mark.parametrize("manufacturer,company,made_by", [
+    ("Unilever UK Ltd", "Unilever", True),
+    ("Sony Interactive Entertainment Europe Ltd", "Sony Interactive Entertainment", True),
+    ("Unilever", "Unilever", True),
+    ("Unileverage Ltd", "Unilever", False),     # whole words only
+    ("Mars Wrigley UK", "Unilever", False),
+    ("Unilever UK Ltd", None, False),
+])
+def test_made_by(manufacturer, company, made_by):
+    assert _made_by(manufacturer, company) is made_by
+
+
+def test_tidy_manufacturer():
+    assert tidy_manufacturer("‏ : ‎ Sony Interactive Entertainment Europe Ltd ") == "Sony Interactive Entertainment Europe Ltd"
+
+
+def _gleif_by_name(records: dict[str, dict]):
+    """GLEIF name search: answers only the exact spelling it is asked for, like the live API."""
+    def answer(request: httpx.Request):
+        name = request.url.params.get("filter[entity.legalName]", "")
+        return {"data": [records[name]]} if name in records else {"data": []}
+    return answer
+
+
+async def test_manufacturer_gives_the_uk_company(db):
+    """PlayStation 5 Pro → Sony Interactive Entertainment (US), page says
+    "Manufacturer: Sony Interactive Entertainment Europe Ltd" → its UK company."""
+    ps5 = _wikidata(
+        _search_hits(("Q1", "PlayStation 5 Pro")),
+        {"Q1": _entity("Q1", "PlayStation 5 Pro", _item_claim("P176", "Q2"), _claim("P856", "https://www.playstation.com/")),
+         "Q2": _entity("Q2", "Sony Interactive Entertainment", _claim("P856", "https://www.sie.com/"))},
+    )
+    http, transport = _client({
+        "https://www.wikidata.org": ps5,
+        "https://api.gleif.org": _gleif_by_name({
+            # Only the "Limited" spelling exists, as at GLEIF: "Ltd" finds nothing.
+            "Sony Interactive Entertainment Europe Limited": _lei_record("SONY INTERACTIVE ENTERTAINMENT EUROPE LIMITED", "01234567"),
+        }),
+    })
+    async with http:
+        result = await company_lookup("PlayStation 5 Pro", "https://www.amazon.co.uk/dp/X", http=http, db_path=db,
+                                      ch_api_key="", manufacturer="Sony Interactive Entertainment Europe Ltd")
+    assert result["ch_number"] == "01234567"
+    assert result["parent"] == "Sony Interactive Entertainment"
+    assert result["match_via"] == ("Wikidata; UK company from the page's manufacturer (GLEIF): "
+                                   "SONY INTERACTIVE ENTERTAINMENT EUROPE LIMITED")
+    assert result["records"]  # joined on that number
+
+
+_TWO_DOVES = _wikidata(
+    _search_hits(("Q962709", "Dove"), ("Q3038279", "Dove")),
+    {
+        "Q962709": _entity("Q962709", "Dove", _item_claim("P749", "Q157062"), _claim("P856", "https://www.dove.com/")),
+        "Q3038279": _entity("Q3038279", "Dove", _claim("P856", "https://www.dovechocolate.com/")),
+        "Q157062": _entity("Q157062", "Unilever", _claim("P2622", "00041424")),
+    },
+)
+
+
+async def test_manufacturer_tells_apart_brands_that_share_a_name(db):
+    http, _ = _client({"https://www.wikidata.org": _TWO_DOVES, "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY})
+    async with http:
+        result = await company_lookup("Dove", "https://www.amazon.co.uk/dp/X", http=http, db_path=db,
+                                      ch_api_key="", manufacturer="Unilever UK Ltd")
+    assert result["parent"] == "Unilever" and result["ch_number"] == "00041424"
+    assert result["match_via"] == "Wikidata, told apart by the page's manufacturer"
+
+
+async def test_same_name_brands_stay_ambiguous_without_a_fitting_manufacturer(db):
+    for manufacturer in (None, "Some Distributor Ltd"):
+        http, _ = _client({"https://www.wikidata.org": _TWO_DOVES, "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY})
+        async with http:
+            result = await company_lookup("Dove", "https://www.amazon.co.uk/dp/X", http=http, db_path=db,
+                                          ch_api_key="", manufacturer=manufacturer)
+        assert result["match_via"] == "Brand not identified", manufacturer
+
+
+async def test_manufacturer_near_miss_legal_name_is_rejected(db):
+    http, _ = _client({
+        "https://www.wikidata.org": _EMPTY_WIKIDATA,
+        "https://api.gleif.org": _gleif_by_name({
+            "Unilever UK Limited": _lei_record("UNILEVER UK & CN HOLDINGS LIMITED", "00077912"),
+        }),
+    })
+    async with http:
+        result = await company_lookup("Unbranded", "amazon.co.uk", http=http, db_path=db, ch_api_key="",
+                                      manufacturer="Unilever UK Limited")
+    assert result["match_via"] == "Brand not identified"

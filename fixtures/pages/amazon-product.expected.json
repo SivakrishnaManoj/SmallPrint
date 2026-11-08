@@ -10,6 +10,7 @@
         "brand": "SodaStream",
         "price": 89.99,
         "seller": "Amazon",
+        "manufacturer": "SodaStream UK Ltd",
         "url": "https://www.amazon.co.uk/dp/B09ABC1234",
         "id": "B09ABC1234"
       },

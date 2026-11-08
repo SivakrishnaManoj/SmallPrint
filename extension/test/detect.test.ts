@@ -37,7 +37,7 @@ describe("what each detector finds", () => {
     if (d.status !== "purchase") return;
     expect(d.request.item).toEqual({
       name: "SodaStream Terra Sparkling Water Maker, Black", brand: "SodaStream", price: 89.99,
-      seller: "Amazon", url: "https://www.amazon.co.uk/dp/B09ABC1234", id: "B09ABC1234",
+      seller: "Amazon", manufacturer: "SodaStream UK Ltd", url: "https://www.amazon.co.uk/dp/B09ABC1234", id: "B09ABC1234",
     });
     // The Prime "subscription auto-renews" banner in the header must not make this a subscription.
     expect(d.request.purchase_type_signals).toEqual(["product"]);
@@ -140,6 +140,29 @@ describe("detector order and purity", () => {
   it("ignores non-web URLs and bad input", () => {
     expect(detectPurchase("chrome://extensions", html(""))).toEqual({ status: "none", checkout: false });
     expect(detectPurchase("not a url", html(""))).toEqual({ status: "none", checkout: false });
+  });
+});
+
+describe("manufacturer (for the exact UK company)", () => {
+  it("reads Amazon's details table", () => {
+    const doc = html(`<span id="productTitle">PlayStation 5 Pro</span>
+      <table id="productDetails_techSpec_section_1"><tr><th>Brand</th><td>PlayStation</td></tr>
+      <tr><th> Manufacturer </th><td>\u200eSony Interactive Entertainment Europe Ltd</td></tr></table>`);
+    const d = detectPurchase("https://www.amazon.co.uk/dp/B0DGY63Z2H", doc);
+    expect(d).toMatchObject({ request: { item: { manufacturer: "Sony Interactive Entertainment Europe Ltd" } } });
+  });
+
+  it("reads Amazon's detail bullets, direction marks and all", () => {
+    const d = run("amazon-product");
+    expect(d).toMatchObject({ request: { item: { manufacturer: "SodaStream UK Ltd" } } });
+  });
+
+  it("reads JSON-LD manufacturer, and leaves it out when the page doesn't say", () => {
+    const ld = (extra: string) => `<script type="application/ld+json">{"@type":"Product","name":"Body Wash","brand":"Dove",${extra}"offers":{"price":"3.00"}}</script>`;
+    const withIt = detectPurchase("https://shop.example/p/1", html("", ld(`"manufacturer":{"@type":"Organization","name":"Unilever UK Ltd"},`)));
+    expect(withIt).toMatchObject({ request: { item: { manufacturer: "Unilever UK Ltd" } } });
+    const without = detectPurchase("https://shop.example/p/1", html("", ld("")));
+    expect(without.status === "purchase" && "manufacturer" in without.request.item).toBe(false);
   });
 });
 

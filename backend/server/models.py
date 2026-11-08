@@ -8,6 +8,8 @@ class ItemIn(BaseModel):
     brand: str | None = None
     price: float | None = None
     seller: str | None = None
+    # As the page states it (e.g. Amazon's "Manufacturer" row): the exact UK company, often.
+    manufacturer: str | None = None
     url: str
     id: str | None = None
 
