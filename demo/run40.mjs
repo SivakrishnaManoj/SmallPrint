@@ -80,7 +80,7 @@ const headless = opt.headless ? true : opt.headed ? false : !(process.env.DISPLA
 
 const PANEL_CAP_MS = 90_000; // the panel itself gives up after 60 s (extension/src/config.ts TIMEOUTS) plus T&C fetches
 const SETTLE_MS = 2_000; // the panel must hold a final state this long (a detection change can start a new run)
-const BOT_CHECK = /captcha|robot check|not a robot|are you a (human|robot)|verify (that )?you are (a )?human|unusual traffic|access denied|attention required|pardon our interruption|request unsuccessful|press (&|and) hold|click the button below to continue shopping/i;
+const BOT_CHECK = /(?<!re)captcha|robot check|not a robot|are you a (human|robot)|(verify|confirm) (that )?you are (a )?human|_Incapsula_Resource|unusual traffic|access denied|attention required|pardon our interruption|request unsuccessful|press (&|and) hold|click the button below to continue shopping/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const firstLine = (s) => String(s).split("\n")[0].slice(0, 160);
 
@@ -290,7 +290,8 @@ async function visit(entry, { second = false } = {}) {
     const { tabId, stored } = await waitForDetection(tab, before);
     v.finalUrl = tab.url();
     if (stored) v.detection = { status: stored.detection.status, detector: stored.detection.detector ?? null, checkout: !!stored.detection.checkout };
-    const head = await tab.evaluate(() => `${document.title}\n${document.body?.innerText.slice(0, 3000) ?? ""}`).catch(() => "");
+    // Incapsula's block page is an empty body plus an iframe, so add that iframe's source.
+    const head = await tab.evaluate(() => `${document.title}\n${document.body?.innerText.slice(0, 3000) ?? ""}\n${document.querySelector('iframe[src*="_Incapsula_Resource"]')?.src ?? ""}`).catch(() => "");
     const bot = BOT_CHECK.exec(head);
     if (v.httpStatus >= 400) v.blocked = `page answered HTTP ${v.httpStatus}`;
     else if (bot && v.detection?.status !== "purchase") v.blocked = `bot check ("${bot[0]}")`;
