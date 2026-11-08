@@ -22,3 +22,6 @@ CLAUDE.md
 # Claude Code: local worktrees and per-user settings
 .claude/worktrees/
 .claude/settings.local.json
+
+# Built for the demo (demo/DEMO.md checklist); shared through the team drive
+demo/smallprint.zip

@@ -40,6 +40,29 @@ function sellerFrom(doc: Document): string | null {
   return m ? clean(m[1]) : null;
 }
 
+/** Amazon writes invisible direction marks around detail values ("Manufacturer ‏ : ‎ X"). */
+const tidy = (s: string) => clean(s.replace(/[\u200e\u200f]/g, "")).replace(/^[:\s]+|[:\s]+$/g, "");
+
+/**
+ * The "Manufacturer" from the product details, as the page states it. Often the UK company
+ * itself ("Sony Interactive Entertainment Europe Ltd"), which the backend matches exactly.
+ */
+export function manufacturerFrom(doc: Document): string | null {
+  for (const row of Array.from(doc.querySelectorAll(
+    "#productDetails_techSpec_section_1 tr, #productDetails_detailBullets_sections1 tr, #technicalSpecifications_section_1 tr, #prodDetails tr",
+  ))) {
+    if (/^manufacturer$/i.test(tidy(textOf(row.querySelector("th"))))) {
+      const value = tidy(textOf(row.querySelector("td")));
+      if (value) return value;
+    }
+  }
+  for (const li of Array.from(doc.querySelectorAll("#detailBullets_feature_div li"))) {
+    const m = tidy(textOf(li)).match(/^manufacturer\s*:\s*(.+)$/i);
+    if (m) return tidy(m[1]);
+  }
+  return null;
+}
+
 export function amazonDetector({ url, doc }: PageContext): DetectorHit | null {
   if (!isAmazon(url)) return null;
   const title = textOf(doc.querySelector("#productTitle"));
@@ -74,6 +97,7 @@ export function amazonDetector({ url, doc }: PageContext): DetectorHit | null {
       brand: brandFrom(doc),
       price: parsePrice(textOf(priceEl)),
       seller: sellerFrom(doc),
+      ...(manufacturerFrom(doc) ? { manufacturer: manufacturerFrom(doc) } : {}),
       url: asin ? `${url.origin}/dp/${asin}` : url.origin + url.pathname,
       id: asin,
     },
