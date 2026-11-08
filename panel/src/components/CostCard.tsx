@@ -1,37 +1,22 @@
 import { useState } from "preact/hooks";
 import { CardShell } from "./CardShell";
 import type { CostStream, CardState } from "../types";
-
-type UsageLevel = "low" | "mid" | "high";
+import { CostModelError, lifetimeCost, type Horizon, type UsageLevel } from "../cost/lifetimeCost";
 
 interface Props {
   costStreams: CostStream[];
   state: CardState;
-  horizon: 12 | 24;
+  horizon: Horizon;
 }
 
-function computeTotal(streams: CostStream[], months: number, usageLevel: UsageLevel): number {
-  let total = 0;
-  for (const s of streams) {
-    if (s.type === "one_off") {
-      total += s.amount ?? 0;
-    } else if (s.type === "recurring") {
-      const from = s.from_month ?? 1;
-      const to = Math.min(s.to_month ?? months, months);
-      const count = Math.max(0, to - from + 1);
-      total += (s.amount ?? 0) * count;
-    } else if (s.type === "step_change") {
-      const stepMonth = s.month ?? months + 1;
-      if (stepMonth <= months) {
-        const remaining = months - stepMonth + 1;
-        total += (s.amount ?? 0) * remaining;
-      }
-    } else if (s.type === "usage" && s.unit_price != null && s.units_per_month) {
-      const units = s.units_per_month[usageLevel] ?? 0;
-      total += s.unit_price * units * months;
-    }
+/** The total for the chosen usage level, or `null` when no trustworthy total exists. */
+function totalFor(streams: CostStream[], horizon: Horizon, usageLevel: UsageLevel): number | null {
+  try {
+    return lifetimeCost(streams, horizon).total?.[usageLevel] ?? null;
+  } catch (error) {
+    if (error instanceof CostModelError) return null;
+    throw error;
   }
-  return total;
 }
 
 export function CostCard({ costStreams, state, horizon }: Props) {
@@ -45,7 +30,11 @@ export function CostCard({ costStreams, state, horizon }: Props) {
     return <CardShell title="Cost over time" state="not_found"><p>Cost information wasn't found for this item.</p></CardShell>;
   }
 
-  const total = computeTotal(costStreams, displayHorizon, usageLevel);
+  const total = totalFor(costStreams, displayHorizon, usageLevel);
+  if (total === null) {
+    // A stream could not be read, so no total is shown rather than a wrong one.
+    return <CardShell title="Cost over time" state="not_found"><p>Cost information wasn't found for this item.</p></CardShell>;
+  }
   const hasUsage = costStreams.some((s) => s.type === "usage");
 
   return (
