@@ -32,7 +32,7 @@ MAX_OUTPUT_TOKENS = 4_000
 PRICE_IN = 0.15 / 1_000_000
 PRICE_OUT = 0.60 / 1_000_000
 
-# About 75 worst-case extraction calls per install per day.
+# About 55 worst-case extraction calls per install per day (8k in + 4k out = $0.0036 each).
 DEFAULT_DAILY_LIMIT_USD = float(os.environ.get("SMALLPRINT_DAILY_LIMIT_USD", "0.20"))
 
 

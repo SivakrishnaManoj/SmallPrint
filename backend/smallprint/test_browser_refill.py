@@ -1,4 +1,4 @@
-"""V6 (#28): browser-use refill agent tests. HTTP faked at the transport layer."""
+"""V6 (#28): browser-use refill agent tests. OpenAI (httpx2) and page fetches (httpx) are faked at the transport layer."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,7 @@ import json
 import httpx
 import httpx2
 import pytest
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from smallprint.browser_refill import SOURCE, browse_for_refill, find_refill_links
 from smallprint.refill import DEFAULT_USAGE, SOURCE_DEFAULT_USAGE
@@ -72,7 +72,7 @@ def test_refill_links_empty_on_no_matches():
 # ---------------------------------------------------------------------------
 
 class Fakes:
-    def __init__(self, llm_json: dict | None = None, stop_reason: str = "end_turn",
+    def __init__(self, llm_json: dict | None = None, stop_reason: str = "stop",
                  product_html: str = PRODUCT_HTML, refill_html: str = REFILL_HTML,
                  refill_status: int = 200):
         self.llm_json = llm_json if llm_json is not None else GOOD_LLM
@@ -86,10 +86,12 @@ class Fakes:
     def llm_handler(self, request: httpx2.Request) -> httpx2.Response:
         self.llm_calls.append(json.loads(request.content))
         return httpx2.Response(200, json={
-            "id": "m", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
-            "content": [] if self.stop_reason == "refusal" else [{"type": "text", "text": json.dumps(self.llm_json)}],
-            "stop_reason": self.stop_reason, "stop_sequence": None,
-            "usage": {"input_tokens": 1500, "output_tokens": 200},
+            "id": "c", "object": "chat.completion", "created": 0, "model": "gpt-4o-mini",
+            "choices": [{"index": 0, "finish_reason": "stop", "message": {
+                "role": "assistant",
+                "content": None if self.stop_reason == "refusal" else json.dumps(self.llm_json),
+                "refusal": "No." if self.stop_reason == "refusal" else None}}],
+            "usage": {"prompt_tokens": 1500, "completion_tokens": 200, "total_tokens": 1700},
         })
 
     def http_handler(self, request: httpx.Request) -> httpx.Response:
@@ -99,7 +101,7 @@ class Fakes:
         return httpx.Response(self.refill_status, text=self.refill_html, headers={"content-type": "text/html"})
 
     def clients(self):
-        client = AsyncAnthropic(api_key="t", max_retries=0,
+        client = AsyncOpenAI(api_key="t", max_retries=0,
                                 http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(self.llm_handler)))
         http = httpx.AsyncClient(transport=httpx.MockTransport(self.http_handler))
         return client, http
@@ -139,8 +141,8 @@ async def test_uses_product_label_in_llm_prompt():
     f = Fakes()
     await _browse(f)
     assert len(f.llm_calls) == 1
-    assert "SodaStream" in f.llm_calls[0]["messages"][0]["content"]
-    assert "Terra" in f.llm_calls[0]["messages"][0]["content"]
+    assert "SodaStream" in f.llm_calls[0]["messages"][1]["content"]
+    assert "Terra" in f.llm_calls[0]["messages"][1]["content"]
 
 
 async def test_no_refill_links_returns_none_without_llm_call():
