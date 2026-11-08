@@ -326,9 +326,9 @@ async def test_name_only_ethics_match_without_ch_number(db):
     con = sqlite3.connect(db)
     con.execute(
         "INSERT INTO records (ch_number, company_name, kind, date, summary, source_url) VALUES (?,?,?,?,?,?)",
-        (None, "PepsiCo", "lgbtq_rights", None,
-         "Listed by Accountable for Equality as a corporate donor to US candidates "
-         "or committees with voting records opposing LGBTQ+ rights.", None),
+        (None, "PepsiCo", "climate", "2024-03-01",
+         "Has a Science Based Targets initiative (SBTi) validated near-term emissions reduction target.",
+         "https://sciencebasedtargets.org/companies-taking-action/"),
     )
     con.commit()
     con.close()
@@ -346,7 +346,7 @@ async def test_name_only_ethics_match_without_ch_number(db):
 
     assert result["ch_number"] is None
     assert result["match_via"] == "Brand name match"
-    assert any(r["kind"] == "lgbtq_rights" for r in result["records"])
+    assert any(r["kind"] == "climate" for r in result["records"])
 
 
 async def test_ch_fallback_on_exact_name_match(db):
@@ -662,7 +662,9 @@ async def test_known_parent_without_a_uk_number_keeps_its_name_matched_records(d
     con = sqlite3.connect(db)
     con.execute(
         "INSERT INTO records (ch_number, company_name, kind, date, summary, source_url) VALUES (?,?,?,?,?,?)",
-        (None, "PepsiCo", "lgbtq_rights", None, "Listed by Accountable for Equality as a corporate donor.", None),
+        (None, "PepsiCo", "climate", "2024-03-01",
+         "Has a Science Based Targets initiative (SBTi) validated near-term emissions reduction target.",
+         "https://sciencebasedtargets.org/companies-taking-action/"),
     )
     con.commit()
     con.close()
@@ -674,7 +676,28 @@ async def test_known_parent_without_a_uk_number_keeps_its_name_matched_records(d
     async with http:
         result = await company_lookup("Pepsi Max", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
     assert result["ch_number"] is None and result["parent"] == "PepsiCo"
-    assert [r["kind"] for r in result["records"]] == ["lgbtq_rights"]
+    assert [r["kind"] for r in result["records"]] == ["climate"]
+
+
+async def test_undated_records_are_not_shown(db):
+    """Undated rows (the lgbtq_rights and abortion_rights lists) can't be cited: left out."""
+    con = sqlite3.connect(db)
+    con.executemany(
+        "INSERT INTO records (ch_number, company_name, kind, date, summary, source_url) VALUES (?,?,?,?,?,?)",
+        [(None, "PepsiCo", "lgbtq_rights", None, "Listed by Accountable for Equality as a corporate donor.", None),
+         (None, "PepsiCo", "abortion_rights", "", "Listed by Accountable for Equality Action as a donor.", None)],
+    )
+    con.commit()
+    con.close()
+    pepsico = _entity("Q200", "PepsiCo", _claim("P856", "https://www.pepsico.com/"))
+    http, _ = _client({
+        "https://www.wikidata.org": _pepsi_max(pepsico),
+        "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY,
+    })
+    async with http:
+        result = await company_lookup("Pepsi Max", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
+    assert result["parent"] == "PepsiCo"
+    assert result["records"] == []
 
 
 async def test_an_ancestors_lei_beyond_the_displayed_owner_is_not_used(db):

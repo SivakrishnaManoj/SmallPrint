@@ -123,7 +123,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   horizon: 12,
-  recordKinds: ["donation", "gender_pay_gap", "modern_slavery", "asa_ruling", "lgbtq_rights", "abortion_rights", "climate"],
+  recordKinds: ["donation", "gender_pay_gap", "modern_slavery", "asa_ruling", "climate"],
 };
 
 export interface AnalyseRequest {

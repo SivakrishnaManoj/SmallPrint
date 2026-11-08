@@ -504,6 +504,12 @@ def _load_records(ch_number: str | None, db_path: Path, names: tuple[str, ...] =
         log.exception("records query failed for ch_number=%s", ch_number)
         return []
     for r in rows:
+        # A record needs a date: the card says when it was recorded, and an undated
+        # line can't be cited (the response schema requires date). This leaves out the
+        # undated, unlinked lgbtq_rights and abortion_rights rows (decided for the demo,
+        # 2026-11-08; ADR 0002).
+        if not r[2]:
+            continue
         key = (r[0], r[1], r[2], r[3])
         if key in seen:
             continue
