@@ -21,10 +21,6 @@ PRODUCT_HTML = """
 <html><body>
   <h1>SodaStream Terra Sparkling Water Maker</h1>
   <a href="/products/co2-cylinder-60l">SodaStream CO2 Cylinder 60L - Replacement</a>
-<<<<<<< Updated upstream
-=======
-  <a href="/products/spare-bottles">Spare Bottles</a>
->>>>>>> Stashed changes
   <a href="/about">About us</a>
   <a href="https://other.example/refill">External refill</a>
 </body></html>
@@ -189,11 +185,7 @@ async def test_default_usage_when_no_interval_stated():
     f = Fakes(llm_json=no_interval)
     stream = await _browse(f)
     assert stream["units_per_month"] == DEFAULT_USAGE
-<<<<<<< Updated upstream
     assert stream["evidence"]["source_step"] == SOURCE
-=======
-    assert stream["evidence"]["source_step"] == SOURCE  # source_step overridden even for default usage
->>>>>>> Stashed changes
 
 
 async def test_spend_limit_stops_llm_calls():
@@ -209,11 +201,7 @@ async def test_caches_found_result():
     first = await _browse(f, cache=cache)
     second = await _browse(f, cache=cache)
     assert first == second
-<<<<<<< Updated upstream
     assert len(f.llm_calls) == 1
-=======
-    assert len(f.llm_calls) == 1  # second call served from cache
->>>>>>> Stashed changes
 
 
 async def test_caches_not_found_when_fully_checked():
@@ -221,11 +209,7 @@ async def test_caches_not_found_when_fully_checked():
     f = Fakes(llm_json=NULL_LLM)
     await _browse(f, cache=cache)
     await _browse(f, cache=cache)
-<<<<<<< Updated upstream
     assert len(f.llm_calls) == 1
-=======
-    assert len(f.llm_calls) == 1  # cached "looked properly, nothing there"
->>>>>>> Stashed changes
 
 
 async def test_refusal_is_not_cached():
@@ -233,8 +217,4 @@ async def test_refusal_is_not_cached():
     f = Fakes(stop_reason="refusal")
     await _browse(f, cache=cache)
     await _browse(f, cache=cache)
-<<<<<<< Updated upstream
     assert len(f.llm_calls) == 2
-=======
-    assert len(f.llm_calls) == 2  # refusal is retried
->>>>>>> Stashed changes
