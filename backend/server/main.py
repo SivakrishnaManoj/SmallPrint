@@ -78,16 +78,11 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Integration stubs — replace these with real module calls at H6
+# Mock mode sources (no OPENAI_API_KEY). The real pipeline is server/pipeline.py.
 # ---------------------------------------------------------------------------
 
 async def terms_source(request: AnalyseRequest, fixture: dict) -> dict:
-    """Stub: returns cost_streams, lock_in and small_print slices from fixture.
-
-    Real implementation will call:
-        from smallprint.terms import analyse_terms
-        return await analyse_terms(request)
-    """
+    """Mock mode's T&C cards: the fixture's cost_streams, lock_in and small_print slices."""
     return {
         "cost_streams": fixture.get("cost_streams", []),
         "lock_in": fixture.get("lock_in", {}),
