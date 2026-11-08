@@ -1,6 +1,7 @@
-"""Tests for /health and /analyse endpoints."""
+"""Tests for /health, /analyse, and /flag/company-match endpoints."""
 from __future__ import annotations
 import json
+import sqlite3
 from pathlib import Path
 
 import jsonschema
@@ -100,11 +101,12 @@ def test_default_record_kinds_match_data_kinds() -> None:
     assert m, "Could not find DEFAULT_SETTINGS.recordKinds in types.ts"
     kinds = re.findall(r'"([^"]+)"', m.group(1))
 
-    allowed = {"donation", "gender_pay_gap", "modern_slavery"}
+    # asa_ruling is planned (UI-side) but not yet in the records DB.
+    allowed = {"donation", "gender_pay_gap", "modern_slavery", "asa_ruling"}
     unknown = set(kinds) - allowed
     assert not unknown, (
-        f"DEFAULT_SETTINGS.recordKinds contains ids not present in the DB: {unknown}. "
-        f"DB kinds are: {allowed}"
+        f"DEFAULT_SETTINGS.recordKinds contains ids not present in the DB or planned set: {unknown}. "
+        f"Known kinds: {allowed}"
     )
 
 
@@ -119,3 +121,47 @@ async def test_rate_limit(client: AsyncClient) -> None:
 
     resp_61 = await client.post("/analyse", json=req)
     assert resp_61.status_code == 429
+
+
+# ---------------------------------------------------------------------------
+# /flag/company-match
+# ---------------------------------------------------------------------------
+
+async def test_flag_company_match(
+    client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FLAGS_DB", str(tmp_path / "flags.sqlite"))
+    resp = await client.post(
+        "/flag/company-match",
+        json={
+            "brand": "Fizzwell",
+            "matched_parent": "Brightwater Holdings Ltd",
+            "ch_number": "01234567",
+            "match_via": "Wikidata",
+            "page_url": "https://example.com/product",
+            "correction": "Actually owned by Aqua Corp",
+        },
+        headers={"X-Install-Id": "test-install-abc123"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+
+    # Verify the row landed in the DB
+    db = sqlite3.connect(tmp_path / "flags.sqlite")
+    rows = db.execute("SELECT brand, matched_parent, correction, install_id FROM company_flags").fetchall()
+    db.close()
+    assert len(rows) == 1
+    assert rows[0] == ("Fizzwell", "Brightwater Holdings Ltd", "Actually owned by Aqua Corp", "test-install-abc123")
+
+
+async def test_flag_company_match_no_install_id(
+    client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Install ID is optional for the flag endpoint."""
+    monkeypatch.setenv("FLAGS_DB", str(tmp_path / "flags.sqlite"))
+    resp = await client.post(
+        "/flag/company-match",
+        json={"brand": "Acme", "page_url": "https://example.com"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}

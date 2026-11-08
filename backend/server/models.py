@@ -63,3 +63,18 @@ class AnalyseRequest(BaseModel):
         if v is not None and not v.strip():
             raise ValueError("install_id must not be empty")
         return v
+
+
+class FlagCompanyMatchBody(BaseModel):
+    """Body for POST /flag/company-match.
+
+    All fields except page_url are optional so the client can send whatever
+    context it has without risk of a validation error.
+    """
+    brand: str | None = None
+    matched_parent: str | None = None
+    ch_number: str | None = None
+    match_via: str | None = None
+    page_url: str = ""
+    correction: str | None = Field(default=None, max_length=500)
+    install_id: str | None = None
