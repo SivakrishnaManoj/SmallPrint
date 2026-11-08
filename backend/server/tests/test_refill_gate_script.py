@@ -1,4 +1,4 @@
-"""S8 (#21): scripts/refill_gate.py with the real lookup and faked Anthropic/Tavily."""
+"""S8 (#21): scripts/refill_gate.py with the real lookup and faked OpenAI/Tavily."""
 from __future__ import annotations
 
 import importlib.util
@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx
 import httpx2
 import pytest
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from smallprint.search_fallback import TavilySearch
 from smallprint.test_refill import GOOD, NONE, PAGE
@@ -30,15 +30,15 @@ def fake_clients(found_brands: set[str]):
     def llm(request):
         body = json.loads(request.content)
         # content is "<document>\nProduct: <brand> <name>\n\n<page>\n</document>"
-        brand = body["messages"][0]["content"].split("\n")[1].split(" ")[1]
+        brand = body["messages"][1]["content"].split("\n")[1].split(" ")[1]
         out = json.loads(json.dumps(GOOD).replace("Oral-B", brand)) if brand in found_brands else NONE
         return httpx2.Response(200, json={
-            "id": "m", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
-            "content": [{"type": "text", "text": json.dumps(out)}], "stop_reason": "end_turn",
-            "stop_sequence": None, "usage": {"input_tokens": 1500, "output_tokens": 200}})
+            "id": "c", "object": "chat.completion", "created": 0, "model": "gpt-4o-mini",
+            "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": json.dumps(out), "refusal": None}}],
+            "usage": {"prompt_tokens": 1500, "completion_tokens": 200, "total_tokens": 1700}})
 
     return lambda: (
-        AsyncAnthropic(api_key="t", max_retries=0, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(llm))),
+        AsyncOpenAI(api_key="t", max_retries=0, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(llm))),
         TavilySearch("tvly-t", http=httpx.AsyncClient(transport=httpx.MockTransport(tavily))),
     )
 
@@ -55,7 +55,7 @@ def write_products(tmp_path: Path, brands=BRANDS) -> Path:
 
 @pytest.mark.parametrize("n_found,code,verdict", [(7, 0, "7/10, PASS"), (6, 1, "6/10, FAIL")])
 def test_gate_counts_and_records_the_result(monkeypatch, tmp_path, n_found, code, verdict):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
     monkeypatch.setenv("TAVILY_API_KEY", "x")
     monkeypatch.setattr(gate, "make_clients", fake_clients(set(BRANDS[:n_found])))
     out = tmp_path / "result.md"
@@ -69,7 +69,7 @@ def test_gate_counts_and_records_the_result(monkeypatch, tmp_path, n_found, code
 
 
 def test_gate_needs_exactly_ten(monkeypatch, tmp_path):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
     monkeypatch.setenv("TAVILY_API_KEY", "x")
     monkeypatch.setattr(gate, "make_clients", fake_clients(set(BRANDS)))
     out = tmp_path / "r.md"
@@ -77,9 +77,9 @@ def test_gate_needs_exactly_ten(monkeypatch, tmp_path):
     assert "FAIL" in out.read_text() and "exactly 10" in out.read_text()
 
 
-@pytest.mark.parametrize("keys", [{}, {"ANTHROPIC_API_KEY": "x"}])
+@pytest.mark.parametrize("keys", [{}, {"OPENAI_API_KEY": "x"}])
 def test_gate_refuses_without_real_keys(monkeypatch, tmp_path, keys):
-    for k in ("ANTHROPIC_API_KEY", "TAVILY_API_KEY"):
+    for k in ("OPENAI_API_KEY", "TAVILY_API_KEY"):
         monkeypatch.delenv(k, raising=False)
     for k, v in keys.items():
         monkeypatch.setenv(k, v)

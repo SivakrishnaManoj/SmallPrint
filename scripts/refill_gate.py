@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The H10 refill gate (S8, #21): do at least 7 of 10 Amazon test products return a refill price with a source?
 
-    ANTHROPIC_API_KEY=... TAVILY_API_KEY=... python scripts/refill_gate.py
+    OPENAI_API_KEY=... TAVILY_API_KEY=... python scripts/refill_gate.py
 
 Reads demo/refill_gate.csv (url,name,brand: exactly 10 rows, picked by someone
 who didn't build the lookup), runs the real refill lookup on each, prints the
@@ -36,8 +36,8 @@ GATE_INSTALL = "refill-gate"
 
 
 def make_clients():
-    from anthropic import AsyncAnthropic
-    return AsyncAnthropic(), TavilySearch(os.environ["TAVILY_API_KEY"])
+    from openai import AsyncOpenAI
+    return AsyncOpenAI(), TavilySearch(os.environ["TAVILY_API_KEY"])
 
 
 def read_products(path: Path) -> list[dict]:
@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = ap.parse_args(argv)
 
-    missing = [k for k in ("ANTHROPIC_API_KEY", "TAVILY_API_KEY") if not os.environ.get(k)]
+    missing = [k for k in ("OPENAI_API_KEY", "TAVILY_API_KEY") if not os.environ.get(k)]
     if missing:
         print(f"Set {', '.join(missing)}: the gate measures the real lookup.", file=sys.stderr)
         return 2

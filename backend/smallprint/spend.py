@@ -28,9 +28,9 @@ log = logging.getLogger(__name__)
 MAX_INPUT_TOKENS = 8_000
 MAX_OUTPUT_TOKENS = 4_000
 
-# claude-haiku-5-5, USD per token, prompts up to 100K tokens.
-PRICE_IN = 0.10 / 1_000_000
-PRICE_OUT = 0.50 / 1_000_000
+# gpt-4o-mini, USD per token. Check against OpenAI's pricing page if MODEL changes.
+PRICE_IN = 0.15 / 1_000_000
+PRICE_OUT = 0.60 / 1_000_000
 
 # About 75 worst-case extraction calls per install per day.
 DEFAULT_DAILY_LIMIT_USD = float(os.environ.get("SMALLPRINT_DAILY_LIMIT_USD", "0.20"))

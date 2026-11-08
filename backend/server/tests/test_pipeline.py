@@ -1,6 +1,6 @@
 """S5 (#18): /analyse streams real cards, each the moment its source resolves.
 
-The real FastAPI app and the real Anthropic SDK run; only the LLM's HTTP
+The real FastAPI app and the real OpenAI SDK run; only the LLM's HTTP
 transport is faked (recorded replies from the S3 fixtures).
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ import httpx2
 import jsonschema
 import pymupdf
 import pytest
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from httpx import ASGITransport, AsyncClient
 
 from server import main, pipeline
@@ -43,9 +43,10 @@ REQUEST = {
 
 def _reply(text: str) -> dict:
     return {
-        "id": "msg_test", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
-        "content": [{"type": "text", "text": text}], "stop_reason": "end_turn", "stop_sequence": None,
-        "usage": {"input_tokens": 2_000, "output_tokens": 400},
+        "id": "c", "object": "chat.completion", "created": 0, "model": "gpt-4o-mini",
+        "choices": [{"index": 0, "finish_reason": "stop",
+                     "message": {"role": "assistant", "content": text, "refusal": None}}],
+        "usage": {"prompt_tokens": 2_000, "completion_tokens": 400, "total_tokens": 2_400},
     }
 
 
@@ -61,8 +62,8 @@ class FakeLLM:
             return httpx2.Response(self.status, json={"type": "error", "error": {"type": "api_error", "message": "boom"}})
         return httpx2.Response(200, json=self.reply)
 
-    def client(self) -> AsyncAnthropic:
-        return AsyncAnthropic(api_key="test", max_retries=0,
+    def client(self) -> AsyncOpenAI:
+        return AsyncOpenAI(api_key="test", max_retries=0,
                               http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(self.handler)))
 
 

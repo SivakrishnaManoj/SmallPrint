@@ -1,6 +1,6 @@
 """S7 (#16) done when: a second request for the same domain returns without a new LLM call.
 
-Real /analyse, extractor and quote verifier; Anthropic and Tavily faked at HTTP.
+Real /analyse, extractor and quote verifier; OpenAI and Tavily faked at HTTP.
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ async def test_search_results_are_cached_too(monkeypatch, tracker):
 
 
 @pytest.mark.parametrize("reply", [
-    {**_reply("{}"), "stop_reason": "refusal", "content": []},
+    {**_reply("{}"), "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": None, "refusal": "No."}}]},
     _reply("not json"),
 ])
 async def test_a_failed_extraction_is_not_cached(monkeypatch, tracker, reply):
