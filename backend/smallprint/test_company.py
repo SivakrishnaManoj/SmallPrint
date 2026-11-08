@@ -661,3 +661,41 @@ async def test_new_match_descriptions_have_no_verdict_words(db):
         result = await company_lookup("Pepsi Max", "amazon.co.uk", http=http, db_path=db, ch_api_key="")
     assert result["ch_number"] == "SC127671"
     assert not re.search(r"\b(good|bad|ethical|unethical|score|rating|verdict|avoid)\b", json.dumps(result), re.I)
+
+
+async def test_label_match_beats_alias_match(db):
+    """Live case: "Pepsi" the drink vs the European Payments Initiative, aliased "Pepsi"
+    (its old code name). Both have websites, so before this the match was ambiguous."""
+    pepsi = _wikidata(
+        {"search": [
+            {"id": "Q47719", "label": "Pepsi", "match": {"type": "label", "text": "Pepsi"}},
+            {"id": "Q96743053", "label": "European Payments Initiative", "match": {"type": "alias", "text": "Pepsi"}},
+        ]},
+        {
+            "Q47719": _entity("Q47719", "Pepsi", _item_claim("P749", "Q334800"), _claim("P856", "https://www.pepsi.com/")),
+            "Q96743053": _entity("Q96743053", "European Payments Initiative", _claim("P856", "https://epicompany.eu/")),
+            "Q334800": _entity("Q334800", "PepsiCo", _claim("P856", "https://www.pepsico.com/")),
+        },
+    )
+    http, _ = _client({"https://www.wikidata.org": pepsi, "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY})
+    async with http:
+        result = await company_lookup("Pepsi", "https://www.amazon.co.uk/dp/X", http=http, db_path=db, ch_api_key="")
+    assert result["parent"] == "PepsiCo" and result["match_via"] == "Wikidata"
+
+
+async def test_alias_match_still_used_when_no_label_match_qualifies(db):
+    """BT Group is labelled "BT Group" but aliased "BT": with no qualifying label match, the alias wins."""
+    bt = _wikidata(
+        {"search": [
+            {"id": "Q1", "label": "BT", "match": {"type": "label", "text": "BT"}},  # a musician
+            {"id": "Q2", "label": "BT Group", "match": {"type": "alias", "text": "BT"}},
+        ]},
+        {
+            "Q1": _entity("Q1", "BT", _item_claim("P31", "Q5"), _claim("P856", "https://btmusic.com/")),
+            "Q2": _entity("Q2", "BT Group", _claim("P2622", "04190816"), _claim("P856", "https://www.bt.com/")),
+        },
+    )
+    http, _ = _client({"https://www.wikidata.org": bt, "https://api.gleif.org": _GLEIF_AUTOCOMPLETE_EMPTY})
+    async with http:
+        result = await company_lookup("BT", "bt.com", http=http, db_path=db, ch_api_key="")
+    assert result["ch_number"] == "04190816"
