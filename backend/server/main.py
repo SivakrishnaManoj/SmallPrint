@@ -99,15 +99,18 @@ async def terms_source(request: AnalyseRequest, fixture: dict) -> dict:
 
 
 async def company_source(request: AnalyseRequest, fixture: dict) -> dict:
-    """Stub: returns company slice from fixture.
+    """Mock mode's company card: the real company lookup, which needs no LLM key.
 
-    Real implementation will call:
-        from smallprint.company import company_lookup
-        brand = request.item.brand or ""
-        domain = request.item.url
-        return await company_lookup(brand, domain)
+    So local testing without OPENAI_API_KEY still exercises the real matcher (the
+    other cards stay on fixtures). Set SMALLPRINT_COMPANY_LOOKUP=fixture to serve the
+    fixture's company instead, e.g. for an offline demo where the live lookup would
+    only time out.
     """
-    return {"company": fixture.get("company", {})}
+    if os.environ.get("SMALLPRINT_COMPANY_LOOKUP", "").lower() == "fixture":
+        return {"company": fixture.get("company", {})}
+    from server import pipeline
+    [(_, state, company)] = await pipeline.company_source(request)
+    return {"company": company, "card_states": {**fixture.get("card_states", {}), "company": state}}
 
 
 # ---------------------------------------------------------------------------
