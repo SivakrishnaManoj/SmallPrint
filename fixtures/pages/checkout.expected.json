@@ -1,0 +1,54 @@
+{
+  "url": "https://www.fernline.co.uk/checkout/review?session=s3cr3t",
+  "detection": {
+    "status": "purchase",
+    "detector": "wording",
+    "checkout": true,
+    "request": {
+      "item": {
+        "name": "Full Fibre 500",
+        "brand": "Fernline Broadband",
+        "price": 29.99,
+        "seller": "Fernline Broadband",
+        "url": "https://www.fernline.co.uk/checkout/review",
+        "id": null
+      },
+      "purchase_type_signals": [
+        "subscription",
+        "contract"
+      ],
+      "links": [
+        {
+          "url": "https://www.fernline.co.uk/legal/terms-and-conditions",
+          "text": "Terms and conditions",
+          "kind": "terms"
+        },
+        {
+          "url": "https://www.fernline.co.uk/docs/contract-summary-full-fibre-500.pdf",
+          "text": "Contract summary (PDF)",
+          "kind": "contract_summary"
+        },
+        {
+          "url": "https://www.fernline.co.uk/legal/cancellation-rights",
+          "text": "Your cancellation rights",
+          "kind": "cancel"
+        },
+        {
+          "url": "https://www.fernline.co.uk/legal/price-guide",
+          "text": "Price guide",
+          "kind": "price_guide"
+        },
+        {
+          "url": "https://www.fernline.co.uk/legal/privacy",
+          "text": "Privacy",
+          "kind": "privacy"
+        }
+      ],
+      "page_text_snippets": [],
+      "price_drift": {
+        "first_seen": null,
+        "current": 29.99
+      }
+    }
+  }
+}

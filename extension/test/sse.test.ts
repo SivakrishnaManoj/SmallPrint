@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { AnalyseError, SSEParser, streamAnalyse } from "../src/sse";
+import { AnalyseError, SSEParser, buildBody, buildHeaders, streamAnalyse } from "../src/sse";
 import { CANNED_REQUEST } from "../src/config";
 
 const enc = new TextEncoder();
-const FAST = { connectMs: 200, idleMs: 200, totalMs: 2000 };
+const UUID = "6f1c2a9e-3b4d-4e5f-8a7b-9c0d1e2f3a4b";
+const FAST = { connectMs: 200, idleMs: 200, totalMs: 2000, installId: UUID };
 
 /** A fetch whose body emits `chunks` (strings, or a number = delay in ms), then optionally hangs. */
 function fakeFetch(chunks: (string | number)[], init: { status?: number; type?: string; hang?: boolean } = {}): typeof fetch {
@@ -80,7 +81,7 @@ describe("streamAnalyse", () => {
   it("throws timeout when pings keep the stream alive past the total cap", async () => {
     const pings = Array.from({ length: 30 }, () => [": ping\r\n\r\n", 50]).flat();
     const f = fakeFetch(pings, { hang: true });
-    await expect(collect(f, { connectMs: 200, idleMs: 200, totalMs: 400 })).rejects.toMatchObject({ kind: "timeout" });
+    await expect(collect(f, { ...FAST, totalMs: 400 })).rejects.toMatchObject({ kind: "timeout" });
   });
 
   it("throws timeout when the server never answers", async () => {
@@ -115,5 +116,41 @@ describe("streamAnalyse", () => {
     })().catch((e) => e);
     expect(seen).toEqual(["item"]);
     expect(err.kind).toBe("aborted");
+  });
+});
+
+describe("what leaves the browser", () => {
+  it("sends the install UUID only as X-Install-Id, and page data only in the body", async () => {
+    let sent: RequestInit | undefined;
+    const base = fakeFetch([DONE]);
+    const f = ((u: RequestInfo | URL, init?: RequestInit) => { sent = init; return base(u, init); }) as typeof fetch;
+    // Simulate stray user data on the request object.
+    const leaky = { ...CANNED_REQUEST, install_id: "body-id", postcode: "EH1 1YZ", horizon: 24 } as typeof CANNED_REQUEST;
+    for await (const _ of streamAnalyse("http://localhost:8000", leaky, { ...FAST, fetchImpl: f })) { /* drain */ }
+
+    expect(sent?.headers).toEqual({ "Content-Type": "application/json", Accept: "text/event-stream", "X-Install-Id": UUID });
+    expect(sent?.credentials).toBe("omit");
+    const body = JSON.parse(String(sent?.body));
+    expect(Object.keys(body).sort()).toEqual(["item", "links", "page_text_snippets", "price_drift", "purchase_type_signals"]);
+    expect(JSON.stringify(body)).not.toMatch(/install_id|postcode|horizon|EH1/);
+  });
+
+  it("adds the ngrok header only for ngrok hosts", () => {
+    expect(buildHeaders("https://abc.ngrok-free.app/analyse", UUID)).toHaveProperty("ngrok-skip-browser-warning");
+    expect(buildHeaders("http://localhost:8000/analyse", UUID)).not.toHaveProperty("ngrok-skip-browser-warning");
+  });
+
+  it("buildBody keeps fetched T&C documents", () => {
+    const terms = [{ url: "https://x.example/terms", kind: "terms" as const, text: "Terms" }];
+    expect(buildBody({ ...CANNED_REQUEST, terms }).terms).toEqual(terms);
+    expect(buildBody(CANNED_REQUEST)).not.toHaveProperty("terms");
+  });
+
+  it("buildBody drops unknown fields", () => {
+    expect(buildBody({ ...CANNED_REQUEST, extra: 1 } as typeof CANNED_REQUEST)).not.toHaveProperty("extra");
+  });
+
+  it("refuses to send without an install ID", async () => {
+    await expect(collect(fakeFetch([DONE]), { ...FAST, installId: "" })).rejects.toBeInstanceOf(AnalyseError);
   });
 });
