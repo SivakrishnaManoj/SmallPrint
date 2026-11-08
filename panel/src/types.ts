@@ -128,6 +128,8 @@ export interface AnalyseRequest {
     brand?: string | null;
     price?: number | null;
     seller?: string | null;
+    /** As the page states it, e.g. Amazon's "Manufacturer" row. Optional. */
+    manufacturer?: string | null;
     url: string;
     id?: string | null;
   };

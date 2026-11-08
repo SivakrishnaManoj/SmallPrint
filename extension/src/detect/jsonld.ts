@@ -87,6 +87,7 @@ export function jsonLdDetector({ url, doc }: PageContext): DetectorHit | null {
       brand,
       price: offer.price,
       seller: offer.seller,
+      ...(nameOf(product.manufacturer) ? { manufacturer: nameOf(product.manufacturer) } : {}),
       url: itemUrl,
       id: idField ? String(product[idField]) : null,
     },
