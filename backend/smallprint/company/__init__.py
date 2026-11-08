@@ -1,22 +1,33 @@
 """Company matcher (J5, #17): brand → parent → Companies House number.
 
 Chain (each step only runs if the previous found nothing):
+  0. Clean the brand text the page gave us: drop ®/™/©, "Visit the … Store",
+     "Brand: …" and "Official Store" wording.  Rule-based, never fuzzy.
   1. Wikidata — find the brand with the wbsearchentities API (exact label or
      alias match only), then read its claims by ID with wbgetentities:
-     Companies House company ID (P2622), parent organisation (P749) or a
-     single current owner (P127), and official website (P856).  When several
-     items share the name, the one whose website matches the page domain wins;
-     otherwise the match must be unambiguous (one item with its own CH number,
-     or a lone item with an official website).  Never a guess.
-  2. GLEIF — exact legal-name match among GB LEI records registered at
-     Companies House (registration authority RA000585); the CH number is the
+     Companies House company ID (P2622), parent organisation (P749), a single
+     current owner (P127) or a single manufacturer (P176, how product brands
+     such as Pepsi Max are linked), official website (P856) and LEI (P1278).
+     When several items share the name, the one whose website matches the page
+     domain wins; otherwise the match must be unambiguous (one item with its own
+     CH number, or a lone item with an official website).  Never a guess.
+     We never look *down* to a subsidiary: being a group's only UK-registered
+     child on record (a pension trustee, an overseas holding company) does not
+     make it the company behind the brand.  Live testing showed exactly that.
+  2. GLEIF — the LEI (P1278) of the company we display: its own record, if it
+     is registered at Companies House.  Never a child's or an ancestor's record,
+     whose filings belong to a different company.  Then exact legal-name match
+     among GB LEI records registered at Companies House (registration authority
+     RA000585), for the brand and then the parent's name; the CH number is the
      record's registeredAs value.
-  3. Companies House — exact name search on the free Companies House API.
-     Accepts only when a result's title is a case-insensitive exact match for
-     the brand name.
+  3. Companies House — exact name search on the free Companies House API, for
+     the brand and then the parent's name.  Accepts only when a result's title
+     is a case-insensitive exact match.
 
-No fuzzy matching at any step.  "Brand not identified" is the only honest
-answer when nothing matches — never a guess.
+No fuzzy matching at any step.  When the owner is found but no UK company
+number is, the owner and how it was matched are still returned, with no
+records: hiding a known owner would be less honest than saying none matched.
+"Brand not identified" is reserved for when nothing matches at all.
 
 Records are joined on CH number only (strict).  No name-based join because
 a name that looks the same can belong to a different company.
@@ -52,6 +63,23 @@ WIKIDATA_BUDGET_S = 3.5
 GLEIF_COMPANIES_HOUSE_RA = "RA000585"
 _MAX_PARENT_HOPS = 3
 _CH_NUMBER_RE = re.compile(r"^(?:[A-Z]{2}\d{6}|\d{8})$")
+_LEI_RE = re.compile(r"^[A-Z0-9]{18}\d{2}$")
+
+
+def clean_brand(raw: str | None) -> str:
+    """Rule-based clean-up of the brand text a page gives us. Never fuzzy.
+
+    "Visit the Pepsi Max Store" → "Pepsi Max"; "Brand: Dove" → "Dove";
+    "PEPSI MAX®" → "PEPSI MAX"; "Andrex Official Store" → "Andrex".
+    """
+    s = re.sub(r"[®™©]", "", raw or "")
+    s = re.sub(r"\s+", " ", s).strip()
+    m = re.match(r"^visit the (.+?) store$", s, re.I)
+    if m:
+        s = m.group(1)
+    s = re.sub(r"^brand:\s*", "", s, flags=re.I)
+    s = re.sub(r"\s+(?:official\s+)?(?:store|shop)$", "", s, flags=re.I)
+    return s.strip(" -–|,")
 
 # ---------------------------------------------------------------------------
 # Wikidata lookup
@@ -112,16 +140,29 @@ def _is_human(entity: dict) -> bool:
 
 
 def _parent_ids(entity: dict) -> list[str]:
-    """Parent organisation (P749); else the owner (P127) only if there is exactly one.
+    """Parent organisation (P749); else the owner (P127), else the manufacturer (P176),
+    each only if there is exactly one.
 
     P127 on a big company often lists many shareholders.  Calling one of them
-    "the parent" would be a guess, so several owners mean no parent.
+    "the parent" would be a guess, so several owners mean no parent.  Product
+    brands (Pepsi Max, Walkers) are usually linked to their company only by
+    manufacturer, so a single manufacturer counts as the parent.
     """
     parents = _claim_ids(entity, "P749")
     if parents:
         return parents
-    owners = _claim_ids(entity, "P127")
-    return owners if len(owners) == 1 else []
+    for prop in ("P127", "P176"):
+        ids = _claim_ids(entity, prop)
+        if len(ids) == 1:
+            return ids
+    return []
+
+
+def _lei(entity: dict) -> str | None:
+    for v in _claim_values(entity, "P1278"):
+        if isinstance(v, str) and _LEI_RE.match(v.strip().upper()):
+            return v.strip().upper()
+    return None
 
 
 def _pick_candidate(candidates: dict[str, dict], domain: str) -> str | None:
@@ -161,10 +202,12 @@ async def _wd_entities(http: httpx.AsyncClient, ids: list[str]) -> dict[str, dic
 
 async def _wikidata_lookup(
     http: httpx.AsyncClient, brand: str, domain: str,
-) -> tuple[str | None, str | None, str | None]:
-    """Return (parent_name, ch_number, "Wikidata"), or (None, None, None).
+) -> tuple[str | None, str | None, str | None, str | None]:
+    """Return (parent_name, ch_number, match_via, parent_lei), or all None.
 
-    Any network or parsing failure counts as "not found" so the later steps still run.
+    ``parent_name`` can come back without a CH number: the owner is still worth
+    showing.  Any network or parsing failure counts as "not found" so the later
+    steps still run.
     """
     try:
         resp = await http.get(
@@ -183,18 +226,20 @@ async def _wikidata_lookup(
             if text.strip().casefold() == wanted and hit.get("id"):
                 ids.append(hit["id"])
         if not ids:
-            return None, None, None
+            return None, None, None, None
 
         entities = await _wd_entities(http, ids)
         qid = _pick_candidate(entities, domain)
         if qid is None:
-            return None, None, None
+            return None, None, None, None
 
         entity = entities[qid]
         own_ch = _normalise_ch_number(next(iter(_claim_values(entity, "P2622")), None))
         parents = _parent_ids(entity)
         parent_name: str | None = None
+        parent_entity: dict | None = None
         ch = own_ch
+        via = "Wikidata"
 
         # Walk up (breadth-first, at most _MAX_PARENT_HOPS levels) until some
         # ancestor has a Companies House number.
@@ -206,7 +251,8 @@ async def _wikidata_lookup(
             seen.update(frontier)
             level = await _wd_entities(http, frontier)
             if hop == 0:
-                parent_name = next((_entity_label(level[p]) for p in frontier if p in level and _entity_label(level[p])), None)
+                parent_entity = next((level[p] for p in frontier if p in level and _entity_label(level[p])), None)
+                parent_name = _entity_label(parent_entity) if parent_entity else None
             nxt: list[str] = []
             for pid in frontier:
                 pe = level.get(pid)
@@ -216,6 +262,7 @@ async def _wikidata_lookup(
                     pch = _normalise_ch_number(next(iter(_claim_values(pe, "P2622")), None))
                     if pch:
                         ch = pch
+                        parent_entity = pe
                         parent_name = _entity_label(pe) or parent_name
                 nxt.extend(_parent_ids(pe))
             if ch is not None:
@@ -223,16 +270,43 @@ async def _wikidata_lookup(
             frontier = nxt
 
         if ch is None and parent_name is None:
-            return None, None, None
-        return parent_name, ch, "Wikidata"
+            return None, None, None, None
+        # The LEI of the company we will display: the parent shown, or the brand's own
+        # company when it has no parent.  Never another ancestor's.
+        return parent_name, ch, via, _lei(parent_entity if parent_entity else entity)
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
         log.debug("wikidata lookup failed for brand=%s", brand)
-        return None, None, None
+        return None, None, None, None
 
 
 # ---------------------------------------------------------------------------
 # GLEIF lookup
 # ---------------------------------------------------------------------------
+
+def _gleif_uk_number(record: dict) -> tuple[str | None, str | None]:
+    """(legal name, CH number) if this LEI record is registered at Companies House."""
+    entity = (record.get("attributes") or {}).get("entity") or {}
+    if ((entity.get("registeredAt") or {}).get("id")) != GLEIF_COMPANIES_HOUSE_RA:
+        return None, None
+    ch = _normalise_ch_number(entity.get("registeredAs"))
+    name = ((entity.get("legalName") or {}).get("name") or "").strip() or None
+    return (name, ch) if ch else (None, None)
+
+
+async def _gleif_by_lei(http: httpx.AsyncClient, lei: str) -> tuple[str | None, str | None]:
+    """The company with exactly this LEI, if it is registered at Companies House.
+
+    Only the company's own record.  Its children (or parents) are different
+    companies with their own filings, so they are never used.
+    """
+    try:
+        own = await http.get(f"{GLEIF_API}/lei-records/{lei}", headers={"Accept": "application/vnd.api+json"}, timeout=TIMEOUT_S)
+        own.raise_for_status()
+        return _gleif_uk_number(own.json().get("data") or {})
+    except (httpx.HTTPError, ValueError):
+        log.debug("gleif lei lookup failed for %s", lei)
+        return None, None
+
 
 async def _gleif_lookup(http: httpx.AsyncClient, brand: str) -> tuple[str | None, str | None]:
     """Return (legal_name, ch_number) via GLEIF, or (None, None) on any failure.
@@ -350,7 +424,7 @@ async def company_lookup(
     Injectable ``http``, ``db_path`` and ``ch_api_key`` for testing.
     Production callers pass nothing; defaults come from env / filesystem.
     """
-    brand = (brand or "").strip()
+    brand = clean_brand(brand)
     if not brand:
         return _not_identified("")
 
@@ -368,28 +442,46 @@ async def company_lookup(
     try:
         # --- Step 1: Wikidata ---
         try:
-            parent, ch, via = await asyncio.wait_for(_wikidata_lookup(http, brand, domain), WIKIDATA_BUDGET_S)
+            parent, ch, via, parent_lei = await asyncio.wait_for(_wikidata_lookup(http, brand, domain), WIKIDATA_BUDGET_S)
         except asyncio.TimeoutError:
             log.debug("wikidata lookup timed out for brand=%s", brand)
-            parent, ch, via = None, None, None
+            parent, ch, via, parent_lei = None, None, None, None
 
-        # --- Step 2: GLEIF (exact legal name) ---
-        if not ch:
-            gleif_parent, gleif_ch = await _gleif_lookup(http, brand)
+        # --- Step 2: GLEIF: the displayed company's own LEI record ---
+        if not ch and parent_lei:
+            uk_name, uk_ch = await _gleif_by_lei(http, parent_lei)
+            if uk_ch:
+                ch = uk_ch
+                via = f"{via}, then GLEIF: {uk_name}" if via and uk_name else "GLEIF"
+                parent = parent or uk_name
+
+        # Exact names to try at GLEIF and Companies House: the brand, then the parent.
+        names = list(dict.fromkeys(n for n in (brand, parent) if n))
+
+        # --- Step 2b: GLEIF (exact legal name) ---
+        for name in names:
+            if ch:
+                break
+            gleif_parent, gleif_ch = await _gleif_lookup(http, name)
             if gleif_ch:
-                parent = gleif_parent or parent
+                parent = parent or gleif_parent
                 ch = gleif_ch
-                via = "GLEIF"
+                via = "GLEIF" if name == brand else f"{via}, then GLEIF exact name"
 
         # --- Step 3: Companies House exact name ---
-        if not ch:
-            ch_name, ch_num = await _ch_lookup(http, brand, ch_api_key)
+        for name in names:
+            if ch:
+                break
+            ch_name, ch_num = await _ch_lookup(http, name, ch_api_key)
             if ch_num:
                 parent = parent or ch_name
                 ch = ch_num
-                via = "Companies House exact name"
+                via = "Companies House exact name" if name == brand else f"{via}, then Companies House exact name"
 
         if not ch:
+            if parent:
+                # The owner is known even though no UK company number is: say so.
+                return {"brand": brand, "parent": parent, "ch_number": None, "match_via": via, "records": []}
             return _not_identified(brand)
 
         from smallprint.asa import fetch_asa_rulings
