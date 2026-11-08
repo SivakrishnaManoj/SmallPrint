@@ -466,7 +466,7 @@ async def _ch_lookup(http: httpx.AsyncClient, brand: str, api_key: str) -> tuple
 # Records index
 # ---------------------------------------------------------------------------
 
-def _load_records(ch_number: str, db_path: Path, names: tuple[str, ...] = ()) -> list[dict]:
+def _load_records(ch_number: str | None, db_path: Path, names: tuple[str, ...] = ()) -> list[dict]:
     """Return records for this company, newest first. [] if DB absent.
 
     Two join paths (ADR 0001, extended by ADR 0002):
@@ -479,6 +479,7 @@ def _load_records(ch_number: str, db_path: Path, names: tuple[str, ...] = ()) ->
 
     ``names`` are the company's resolved brand and parent. No fuzzy or partial
     matching: a looked-alike name can be a different legal entity.
+    ``ch_number`` is None when no UK company was found: only the name join runs then.
     """
     if not db_path.exists():
         log.warning("records DB not found at %s", db_path)
@@ -604,16 +605,10 @@ async def company_lookup(
                 parent = parent or ch_name
                 ch = ch_num
 
-        if not ch:
-            if parent:
-                # The owner is known even though no UK company number is: say so.
-                return {"brand": brand, "parent": parent, "ch_number": None, "match_via": via, "records": []}
-            return _not_identified(brand)
-
-        from smallprint.asa import fetch_asa_rulings
         db_records = _load_records(ch, db_path, names=(brand, parent or ""))
 
         if ch:
+            from smallprint.asa import fetch_asa_rulings
             asa_records = await fetch_asa_rulings(brand, parent=parent, http=http)
             return {
                 "brand": brand,
@@ -627,10 +622,13 @@ async def company_lookup(
         # rights, climate) carry no CH number and are keyed on the exact brand or
         # parent name, so they can still surface for a foreign parent that has no
         # UK Companies House entry (e.g. PepsiCo, L'Oréal). ADR 0002.
+        if parent:
+            # The owner is known even though no UK company number is: say so.
+            return {"brand": brand, "parent": parent, "ch_number": None, "match_via": via, "records": db_records}
         if db_records:
             return {
                 "brand": brand,
-                "parent": parent,
+                "parent": None,
                 "ch_number": None,
                 "match_via": "Brand name match",
                 "records": db_records,

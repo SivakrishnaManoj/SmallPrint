@@ -86,7 +86,8 @@ async def test_all_card_events_valid_schema(client: AsyncClient) -> None:
 def test_default_record_kinds_match_data_kinds() -> None:
     """DEFAULT_SETTINGS.recordKinds must use the same ids as the records the backend returns.
 
-    The DB uses: donation, gender_pay_gap, modern_slavery.
+    The DB uses: donation, gender_pay_gap, modern_slavery, and the name-keyed
+    ethics kinds lgbtq_rights, abortion_rights, climate (ADR 0002).
     asa_ruling records do not come from the DB: smallprint.asa fetches them
     live and smallprint.company merges them into the company's records.
     A mismatch means CompanyCard never flags any records for the user.
@@ -103,7 +104,7 @@ def test_default_record_kinds_match_data_kinds() -> None:
     assert m, "Could not find DEFAULT_SETTINGS.recordKinds in types.ts"
     kinds = re.findall(r'"([^"]+)"', m.group(1))
 
-    db_kinds = {"donation", "gender_pay_gap", "modern_slavery"}
+    db_kinds = {"donation", "gender_pay_gap", "modern_slavery", "lgbtq_rights", "abortion_rights", "climate"}
     live_kinds = {"asa_ruling"}
     allowed = db_kinds | live_kinds
     unknown = set(kinds) - allowed
