@@ -176,7 +176,30 @@ export function App() {
             )}
             {cards.company && (
               <CardErrorBoundary name="company">
-                <CompanyCard company={cards.company.payload} state={cards.company.state} flaggedKinds={settings.recordKinds} />
+                <CompanyCard
+                  company={cards.company.payload}
+                  state={cards.company.state}
+                  flaggedKinds={settings.recordKinds}
+                  onFlag={async (correction) => {
+                    try {
+                      const r = await fetch(`${serverUrl}/flag/company-match`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          brand: cards.company?.payload?.brand,
+                          matched_parent: cards.company?.payload?.parent,
+                          ch_number: cards.company?.payload?.ch_number,
+                          match_via: cards.company?.payload?.match_via,
+                          page_url: cards.item?.payload?.url ?? "",
+                          correction,
+                        }),
+                      });
+                      return r.ok;
+                    } catch {
+                      return false;
+                    }
+                  }}
+                />
               </CardErrorBoundary>
             )}
             {cards.item && <StatutoryRights purchaseTypes={purchaseTypes} />}

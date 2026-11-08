@@ -205,7 +205,23 @@ body {
 
 /* ---- Company ---- */
 .company__meta { font-size: 13px; color: var(--text-muted); margin: 2px 0; }
-.company__match-via { font-size: 12px; color: var(--text-muted); font-style: italic; margin: 4px 0 10px; }
+.company__match-via { font-size: 12px; color: var(--text-muted); font-style: italic; margin: 4px 0 6px; }
+.company__flag { margin-bottom: 10px; font-size: 12px; }
+.company__flag-trigger {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.company__flag-form { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.company__flag-prompt { margin: 0 0 2px; font-size: 12px; color: var(--text-muted); }
+.company__flag-actions { display: flex; gap: 6px; }
+.company__flag-done { color: var(--found); }
+.company__flag-error { color: var(--error); }
 .records-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .record-item { padding: 10px; background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); }
 /* Tracked = the user chose this kind. Neutral accent, not a warning colour: records are evidence, not verdicts. */
