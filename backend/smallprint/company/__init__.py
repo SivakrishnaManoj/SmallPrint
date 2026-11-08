@@ -272,13 +272,15 @@ async def company_lookup(
         if not ch:
             return _not_identified(brand)
 
-        records = _load_records(ch, db_path)
+        from smallprint.asa import fetch_asa_rulings
+        db_records = _load_records(ch, db_path)
+        asa_records = await fetch_asa_rulings(brand, http=http)
         return {
             "brand": brand,
             "parent": parent,
             "ch_number": ch,
             "match_via": via,
-            "records": records,
+            "records": db_records + asa_records,
         }
 
     finally:
