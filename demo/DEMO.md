@@ -2,7 +2,7 @@
 
 ## Demo pages
 
-Checked with the harness on 2026-11-08 (all reached a correct state; first-visit times shown). Open them in this order, after the pre-warm.
+Checked with the harness on 2026-11-08 (all reached a correct state; first-visit times shown). The video script below opens them as 1, 3, 2, 4, after the warm-up. The same list is `demo/demo-urls.txt`.
 
 | # | Page | What it shows | Found (first visit) |
 |---|---|---|---|
@@ -16,8 +16,11 @@ Backups: Spotify Premium https://www.spotify.com/gb/premium/ (cost, lock-in in 8
 Check on screen before recording. Don't point at these rows: they have a verbatim quote, but the value is wrong or weak (harness run 2026-11-08):
 
 - Amazon "Seller": "Amazon Europe Core SARL", quoted from "This website is owned and maintained by…". It names the website owner, not who sells the item.
-- Audible "Seller: Audible" (quoted from "Audible uses cookies."), "Exit fee: Cancel monthly" and "Auto-renews: Yes" (quoted from the promo banner).
-- Vodafone "Auto-renews": quoted from the pay-as-you-go bundle terms, not the SIM-only plan.
+- Audible: **all of Lock-in** ("Exit fee: Cancel monthly", "Auto-renews" and "How to cancel" quoted from "Cancel monthly", "Notice to cancel" quoted from the 14-day cancellation right) and "Seller" (Audible, Inc.'s copyright-agent address, or "Audible uses cookies."). Point at the cost card only.
+- Vodafone "Auto-renews" and "How to cancel": quoted from the pay-as-you-go bundle terms, not the SIM-only plan. The Purchase card's name ("1GB + 1 Months") is a plan tile.
+- Spotify "Auto-renews" and "How to cancel" (quoted from "Cancel anytime"), "Seller: Spotify".
+
+The values change between runs. `demo/review40.csv` has the latest run with a suggestion in `note` for each suspect row; put `ok` or `wrong` in `verdict`.
 
 Leave Currys out of the demo (it shows a finance offer as a monthly fee).
 
@@ -30,9 +33,9 @@ Record the browser window only, at 1080p, with the side panel open. Use a fresh 
 1. **0:00 – Problem (10 s).** "The headline price is rarely what you pay. Small Print shows the real cost, the lock-in and the public record of the company, from evidence on the page."
 2. **0:10 – Install and first run (15 s).** Show the extension pinned. Open page 1, click the icon. The first-run form asks only for horizon and values. Press **Skip**.
 3. **0:25 – Lifetime cost (30 s).** Page 1. Cards stream in. Point at the 12-month total, then switch the horizon to 24 months. Open one quote and its source link: "Every number has a verbatim quote, and the code checks the quote is in the source before it shows it."
-4. **0:55 – Lock-in and small print (25 s).** Same page: the lock-in terms it found (auto-renewal, how to cancel, notice), each with its quote. Rows it didn't find are not shown; never fill them in by voice.
-5. **1:20 – Product (15 s).** Page 2. The returns window with its quote. Cost and lock-in say they don't apply to a one-off product: "It doesn't invent a monthly fee for a memory card."
-6. **1:35 – Who's behind it (20 s).** Page 3. Vodafone → Companies House 01833679 → records with dates and source links. Say "recorded" and "published", never a verdict.
+4. **0:55 – Lock-in and price rises (25 s).** Open page 3 (Vodafone) now; its company card is step 5. Point at Lock-in "Minimum term: 24 months" ("Save £312 with a 24-month plan.") and the cost card's "+£2.50 a month from month 13" ("The monthly cost will increase each year on 1 April by £2.50…"), each with its quote. Not Audible's lock-in rows, and not Vodafone's "Auto-renews" or "How to cancel" (see the list above). Rows it didn't find are not shown; never fill them in by voice.
+5. **1:20 – Who's behind it (20 s).** Same page. Vodafone → Companies House 01833679 → records with dates and source links. Say "recorded" and "published", never a verdict.
+6. **1:40 – Product (15 s).** Page 2. The returns window with its quote. Cost and lock-in say they don't apply to a one-off product: "It doesn't invent a monthly fee for a memory card."
 7. **1:55 – Not a purchase (5 s).** Page 4. The badge greys out and one card says no purchase was detected.
 8. **2:00 – Close.** "Evidence, not verdicts."
 
@@ -45,8 +48,12 @@ Words to avoid on camera: unethical, scam, broke the law, bad, good. Say "record
 - [ ] Railway variables (Johann sets them): `SMALLPRINT_PREWARM_KEY` set; `SMALLPRINT_DAILY_LIMIT_USD` raised for the demo (for example 2).
 - [ ] Pre-warm **after** the final deploy (the cache is in memory; a redeploy empties it):
       `SMALLPRINT_PREWARM_KEY=… .venv/bin/python scripts/prewarm.py --server https://smallprint-production.up.railway.app --out demo/prewarm_results.csv`
-- [ ] Open each demo page once in the demo profile after the pre-warm; every card resolves, no spinner.
-- [ ] Build the zip: `cd extension && npm ci && npm run build && (cd dist && zip -r ../../demo/smallprint.zip .)`; add `demo/INSTALL.txt` to the zip.
+- [ ] Warm the demo pages **twice**, within 30 minutes of the pitch: `cd extension && npm run test40 -- --urls ../demo/demo-urls.txt`, then the same again. Each run visits every page twice.
+      Why: `prewarm.py` fills the site cache, which the server only uses when a request has no T&C documents. The extension usually sends documents, and the cache is keyed on each document's exact text. The live pages vary: which T&C links appear, what a site serves to a fetch, what search returns. So a visit can bring a document the cache hasn't seen (2026-11-08: Audible's terms page was 8 characters to one fetch and 46,386 to another; a Vodafone visit added a returns page).
+      **Warming makes repeat visits fast most of the time, not every time.** On 2026-11-08, 2 of 5 cached second visits still took 18 s (Audible) and 24 s (Vodafone). Uncached, Vodafone can take about 27 s, over the 25 s T&C budget, and its T&C cards then show "Not found".
+- [ ] On stage: if cards are still loading, say "each value is checked against its source before it's shown" and wait. If a T&C card ends "Not found" on Vodafone, switch to the backup video for that step. Record the backup video from a warmed run.
+- [ ] Open each demo page once in the demo profile after the warm-up; every card resolves, no spinner.
+- [ ] Build the zip: `cd extension && npm ci && npm run build && (cd dist && zip -r ../../demo/smallprint.zip .)`; add `demo/INSTALL.txt` to the zip. (No `zip` on WSL: `python -c "import shutil; shutil.make_archive('../demo/smallprint', 'zip', 'dist')"` from `extension/`, then add INSTALL.txt.) The zip is gitignored; share it through the team drive.
 - [ ] Someone outside the team installs from the zip and sees a working panel (issue #24 done-when).
 - [ ] Backup video recorded and saved locally and in the team drive.
 - [ ] Demo laptop: Wi-Fi checked, notifications off, browser zoom 110%, other tabs closed.
