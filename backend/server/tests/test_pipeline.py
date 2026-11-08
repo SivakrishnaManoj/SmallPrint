@@ -251,3 +251,32 @@ def test_documents_html_text_and_pdf():
 async def test_without_an_api_key_the_mock_still_streams():
     by_card = cards(await stream(REQUEST))
     assert set(by_card) == {"item", "price_drift", "cost", "lock_in", "small_print", "company"}
+
+
+# --- product-only purchases: lifetime cost and lock-in don't apply --------
+# 40-URL run 2026-11-08: Amazon products showed "£37.82 a month" (the price) and
+# finance offers as a monthly fee, and a protection policy's notice period as lock-in.
+# Verbatim quotes, wrong meaning. Lifetime cost and lock-in are for subscriptions and contracts.
+
+async def test_product_only_purchase_has_no_cost_or_lock_in(monkeypatch, tracker):
+    use_llm(monkeypatch, FakeLLM())
+    sub = cards(await stream(REQUEST))
+    use_llm(monkeypatch, FakeLLM())
+    prod = cards(await stream({**REQUEST, "purchase_type_signals": ["product"]}, install="install-product"))
+
+    assert prod["cost"]["state"] == "n_a"
+    assert prod["cost"]["payload"]["cost_streams"] == []
+    assert prod["lock_in"]["state"] == "n_a"
+    assert prod["lock_in"]["payload"]["evidence"] == []
+    assert all(v is None for k, v in prod["lock_in"]["payload"].items() if k != "evidence")
+    # Returns window, warranty and seller still apply to a product.
+    assert prod["small_print"] == sub["small_print"]
+    jsonschema.validate(assemble(prod), RESPONSE_SCHEMA)
+
+
+@pytest.mark.parametrize("signals", [["product", "subscription"], ["product", "contract"], []])
+async def test_cost_and_lock_in_kept_unless_the_page_is_only_a_product(monkeypatch, tracker, signals):
+    use_llm(monkeypatch, FakeLLM())
+    by_card = cards(await stream({**REQUEST, "purchase_type_signals": signals}))
+    assert by_card["cost"]["state"] == "found"
+    assert by_card["lock_in"]["state"] == "found"

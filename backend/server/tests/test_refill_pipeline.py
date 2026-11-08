@@ -51,7 +51,8 @@ def fakes(monkeypatch):
 async def test_gate_off_by_default_no_refill_lookup(fakes, tracker):
     by_card = cards(await stream(PRODUCT))
     assert fakes["llm"] == 0 and fakes["tavily"] == []
-    assert by_card["cost"]["state"] == "not_found"
+    # Lifetime cost doesn't apply to a one-off product unless a refill estimate is found.
+    assert by_card["cost"]["state"] == "n_a"
 
 
 async def test_gate_on_product_gets_an_estimated_refill_row(monkeypatch, fakes, tracker):
