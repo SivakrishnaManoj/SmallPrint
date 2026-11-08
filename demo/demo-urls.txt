@@ -1,0 +1,6 @@
+subscription,https://www.audible.co.uk/ep/whats-audible,DEMO 1 cost over time
+amazon,https://www.amazon.co.uk/dp/B09X7FXHVJ,DEMO 2 DeLonghi grinder product-only
+subscription,https://www.vodafone.co.uk/mobile/best-sim-only-deals,DEMO 3 company records
+no_purchase,https://www.bbc.co.uk/news/technology,DEMO 4 no purchase
+subscription,https://www.spotify.com/gb/premium/,BACKUP Spotify
+amazon,https://www.amazon.co.uk/dp/B09F72J3SG,BACKUP Philips Hue
