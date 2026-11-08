@@ -155,6 +155,17 @@ describe("all four card states render", () => {
   }
 });
 
+describe("limit_reached (contracts/response.schema.json card_state)", () => {
+  it("cost, lock-in and small print say the daily limit was reached, not that nothing was found", () => {
+    render(<CostCard costStreams={[]} state="limit_reached" horizon={12} />);
+    render(<LockInCard lockIn={{ evidence: [] }} state="limit_reached" />);
+    render(<SmallPrintCard items={[]} state="limit_reached" />);
+    expect(screen.getAllByText("Limit reached")).toHaveLength(3);
+    expect(screen.getAllByText(/daily limit/i)).toHaveLength(3);
+    expect(screen.queryAllByText(/wasn't found/)).toHaveLength(0);
+  });
+});
+
 describe("statutory rights", () => {
   it("are shown apart from the cards and labelled as not legal advice", () => {
     render(<StatutoryRights purchaseTypes={["product"]} />);

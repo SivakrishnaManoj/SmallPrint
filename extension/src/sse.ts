@@ -87,7 +87,10 @@ export interface StreamOptions {
 }
 
 const CARD_NAMES = new Set(["item", "cost", "lock_in", "small_print", "company", "price_drift"]);
-const CARD_STATES = new Set(["found", "estimated", "not_found", "n_a"]);
+// Every state in contracts/stream-event.schema.json. limit_reached is what the backend sends for
+// cost, lock-in and small print once the install's daily spend limit is used up; dropping it
+// would leave those cards missing with no explanation.
+const CARD_STATES = new Set(["found", "estimated", "not_found", "n_a", "limit_reached"]);
 
 function toStreamCard(data: string): StreamCard | null {
   try {

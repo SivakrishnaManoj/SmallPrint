@@ -1,4 +1,6 @@
-export type CardState = "found" | "estimated" | "not_found" | "n_a";
+/** contracts/response.schema.json card_state. The four honest states, plus limit_reached: the
+ * backend didn't look because the install's daily spend limit was used up (not "looked, nothing"). */
+export type CardState = "found" | "estimated" | "not_found" | "n_a" | "limit_reached";
 
 export interface Evidence {
   quote?: string | null;
