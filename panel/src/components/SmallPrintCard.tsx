@@ -1,10 +1,14 @@
 import { CardShell } from "./CardShell";
+import { Evidence, hasEvidence } from "./Evidence";
 import type { SmallPrintItem, CardState } from "../types";
 
 interface Props {
   items: SmallPrintItem[];
   state: CardState;
 }
+
+/** "returns_window" → "Returns window"; labels that are already words are left alone. */
+const label = (field: string) => (/_/.test(field) ? field.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()) : field);
 
 export function SmallPrintCard({ items, state }: Props) {
   if (state === "n_a") {
@@ -14,20 +18,20 @@ export function SmallPrintCard({ items, state }: Props) {
     return <CardShell title="Small print" state="not_found"><p>Small print wasn't found for this item.</p></CardShell>;
   }
 
+  // Quote or null: a clause is shown only with its verbatim quote and link.
+  const shown = items.filter((i) => hasEvidence(i.quote, i.url));
+
   return (
     <CardShell title="Small print" state={state}>
-      {items.length === 0 ? (
-        <p>No small print clauses were found.</p>
+      {shown.length === 0 ? (
+        <p>No small print clauses were found with a quote from the source.</p>
       ) : (
         <ul class="small-print__list">
-          {items.map((item, i) => (
-            <li key={i} class="small-print__item">
-              <strong>{item.field}</strong>
-              {item.value && <span>: {item.value}</span>}
-              {item.quote && <blockquote class="evidence-quote">{item.quote}</blockquote>}
-              {item.url && (
-                <a href={item.url} class="source-link" target="_blank" rel="noopener noreferrer">Source ↗</a>
-              )}
+          {shown.map((item, i) => (
+            <li key={i} class="small-print__item" data-testid="small-print-row">
+              <strong>{label(item.field)}</strong>
+              {item.value && <span class="small-print__value">{item.value}</span>}
+              <Evidence quote={item.quote} url={item.url} />
             </li>
           ))}
         </ul>

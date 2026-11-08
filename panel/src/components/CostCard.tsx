@@ -1,88 +1,128 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { CardShell } from "./CardShell";
-import type { CostStream, CardState } from "../types";
-import { CostModelError, lifetimeCost, type Horizon, type UsageLevel } from "../cost/lifetimeCost";
+import { Evidence, hasEvidence } from "./Evidence";
+import type { CostStream, CardState, LockIn } from "../types";
+import { CostModelError, lifetimeCost, type Horizon, type LifetimeCost, type Range } from "../cost/lifetimeCost";
+import { parseExitFee } from "../cost/exitFee";
 
 interface Props {
   costStreams: CostStream[];
   state: CardState;
+  /** The user's default horizon from settings; the switch on the card overrides it. */
   horizon: Horizon;
+  /** For the "if you leave at the end of the horizon" line. Optional. */
+  lockIn?: LockIn;
 }
 
-/** The total for the chosen usage level, or `null` when no trustworthy total exists. */
-function totalFor(streams: CostStream[], horizon: Horizon, usageLevel: UsageLevel): number | null {
+const money = (n: number) => `£${n.toFixed(2)}`;
+const range = (r: Range) => (r.low === r.high ? money(r.mid) : `${money(r.low)} – ${money(r.high)}`);
+
+/** Per-month (or one-off) detail for one stream, as the user reads it. */
+function streamDetail(s: CostStream): string {
+  switch (s.type) {
+    case "one_off":
+      return `${money(s.amount ?? 0)} once`;
+    case "recurring": {
+      const window = s.from_month != null || s.to_month != null
+        ? ` (months ${s.from_month ?? 1}–${s.to_month ?? "end"})`
+        : "";
+      return `${money(s.amount ?? 0)} a month${window}`;
+    }
+    case "step_change":
+      return `+${money(s.amount ?? 0)} a month from month ${s.month}`;
+    case "usage": {
+      const u = s.units_per_month!;
+      const p = s.unit_price ?? 0;
+      return `${money(p)} each × ${u.low}–${u.high} a month = ${money(p * u.low)} – ${money(p * u.high)} a month (estimate)`;
+    }
+  }
+}
+
+/** The lifetime total, or null when a stream can't be read (shown as not_found, never a wrong number). */
+function compute(streams: CostStream[], horizon: Horizon, lockIn?: LockIn): LifetimeCost | null {
   try {
-    return lifetimeCost(streams, horizon).total?.[usageLevel] ?? null;
+    return lifetimeCost(streams, horizon, { exitFee: parseExitFee(lockIn?.exit_fee), minTermMonths: lockIn?.min_term_months });
   } catch (error) {
     if (error instanceof CostModelError) return null;
     throw error;
   }
 }
 
-export function CostCard({ costStreams, state, horizon }: Props) {
-  const [usageLevel, setUsageLevel] = useState<UsageLevel>("mid");
-  const [displayHorizon, setDisplayHorizon] = useState<12 | 24>(horizon);
+const NotFound = () => (
+  <CardShell title="Cost over time" state="not_found">
+    <p>Cost information wasn't found for this item.</p>
+  </CardShell>
+);
+
+export function CostCard({ costStreams, state, horizon, lockIn }: Props) {
+  const [displayHorizon, setDisplayHorizon] = useState<Horizon>(horizon);
+  // Follow the settings when the user changes their default horizon.
+  useEffect(() => setDisplayHorizon(horizon), [horizon]);
 
   if (state === "n_a") {
     return <CardShell title="Cost over time" state="n_a"><p class="muted">Cost analysis doesn't apply to this page.</p></CardShell>;
   }
-  if (state === "not_found") {
-    return <CardShell title="Cost over time" state="not_found"><p>Cost information wasn't found for this item.</p></CardShell>;
-  }
+  if (state === "not_found") return <NotFound />;
 
-  const total = totalFor(costStreams, displayHorizon, usageLevel);
-  if (total === null) {
-    // A stream could not be read, so no total is shown rather than a wrong one.
-    return <CardShell title="Cost over time" state="not_found"><p>Cost information wasn't found for this item.</p></CardShell>;
-  }
-  const hasUsage = costStreams.some((s) => s.type === "usage");
+  // Quote or null: a cost without its quote and link is neither shown nor counted.
+  const verified = costStreams.filter((s) => hasEvidence(s.evidence?.quote, s.evidence?.url));
+  const skipped = costStreams.length - verified.length;
+  const result = compute(verified, displayHorizon, lockIn);
+  if (!result || !result.total) return <NotFound />;
+
+  // An estimate in the model makes the whole card an estimate, whatever the server said.
+  const shownState: CardState = result.state === "estimated" ? "estimated" : state;
+  const total = result.total;
+  const leaving = result.totalIfLeaving;
+  const usage = verified.filter((s) => s.type === "usage");
 
   return (
-    <CardShell title="Cost over time" state={state}>
+    <CardShell title="Cost over time" state={shownState}>
       <div class="cost__controls">
-        <div class="toggle-group">
-          <button class={displayHorizon === 12 ? "toggle active" : "toggle"} onClick={() => setDisplayHorizon(12)}>12 months</button>
-          <button class={displayHorizon === 24 ? "toggle active" : "toggle"} onClick={() => setDisplayHorizon(24)}>24 months</button>
+        <div class="toggle-group" role="group" aria-label="Horizon">
+          {([12, 24] as Horizon[]).map((h) => (
+            <button
+              key={h}
+              type="button"
+              class={displayHorizon === h ? "toggle active" : "toggle"}
+              aria-pressed={displayHorizon === h}
+              onClick={() => setDisplayHorizon(h)}
+            >
+              {h} months
+            </button>
+          ))}
         </div>
-        {hasUsage && (
-          <div class="slider-group">
-            <label>Usage: </label>
-            {(["low", "mid", "high"] as UsageLevel[]).map((l) => (
-              <button key={l} class={usageLevel === l ? "toggle active" : "toggle"} onClick={() => setUsageLevel(l)}>
-                {l.charAt(0).toUpperCase() + l.slice(1)}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
-      <p class="cost__total">
-        Total over {displayHorizon} months:{" "}
-        <strong>£{total.toFixed(2)}</strong>
-        {state === "estimated" && <span class="estimated-label"> (estimated)</span>}
+      <p class="cost__total" data-testid="cost-total">
+        Total over {displayHorizon} months: <strong>{range(total)}</strong>
+        {usage.length > 0 && <span class="estimated-label"> (estimated range)</span>}
       </p>
+      {usage.length > 0 && (
+        <p class="cost__note">
+          The range comes from low and high usage of {usage.map((s) => s.label).join(", ")}; the sources are quoted below.
+        </p>
+      )}
+      {leaving && leaving.mid !== total.mid && (
+        <p class="cost__note" data-testid="cost-if-leaving">
+          If you leave at month {displayHorizon}, before the minimum term ends: <strong>{range(leaving)}</strong>, including the exit fee.
+        </p>
+      )}
 
       <ul class="cost__streams">
-        {costStreams.map((s, i) => (
-          <li key={i} class="cost__stream-item">
+        {verified.map((s, i) => (
+          <li key={i} class="cost__stream-item" data-testid="cost-stream">
             <span class="stream__label">{s.label}</span>
-            <span class="stream__detail">
-              {s.type === "one_off" && `£${s.amount?.toFixed(2)} once`}
-              {s.type === "recurring" && `£${s.amount?.toFixed(2)}/month`}
-              {s.type === "step_change" && `+£${s.amount?.toFixed(2)}/month from month ${s.month}`}
-              {s.type === "usage" && s.unit_price != null && s.units_per_month && (
-                `£${(s.unit_price * (s.units_per_month[usageLevel] ?? 0)).toFixed(2)}/month (${usageLevel})`
-              )}
-            </span>
-            {s.evidence?.quote && (
-              <blockquote class="evidence-quote">{s.evidence.quote}</blockquote>
-            )}
-            {s.evidence?.url && (
-              <a href={s.evidence.url} class="source-link" target="_blank" rel="noopener noreferrer">Source ↗</a>
-            )}
+            <span class="stream__detail">{streamDetail(s)}</span>
+            <Evidence quote={s.evidence.quote} url={s.evidence.url} />
           </li>
         ))}
       </ul>
+      {skipped > 0 && (
+        <p class="muted">
+          {skipped === 1 ? "1 cost was" : `${skipped} costs were`} found without a quote from the source, so {skipped === 1 ? "it isn't" : "they aren't"} shown or counted.
+        </p>
+      )}
     </CardShell>
   );
 }
