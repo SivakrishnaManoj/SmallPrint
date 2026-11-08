@@ -6,6 +6,7 @@ import { streamAnalyse } from "./sse";
 import type { Settings, AnalyseRequest, StreamCard, CardState, AnalyseResult } from "./types";
 import { ItemCard } from "./components/ItemCard";
 import { CostCard } from "./components/CostCard";
+import { StatutoryRights } from "./components/StatutoryRights";
 import { PriceDriftCard } from "./components/PriceDriftCard";
 import { LockInCard } from "./components/LockInCard";
 import { SmallPrintCard } from "./components/SmallPrintCard";
@@ -155,7 +156,7 @@ export function App() {
             )}
             {cards.cost && (
               <CardErrorBoundary name="cost">
-                <CostCard costStreams={cards.cost.payload.cost_streams ?? []} state={cards.cost.state} horizon={settings.horizon} />
+                <CostCard costStreams={cards.cost.payload.cost_streams ?? []} state={cards.cost.state} horizon={settings.horizon} lockIn={cards.lock_in && cards.lock_in.state !== "not_found" && cards.lock_in.state !== "n_a" ? cards.lock_in.payload : undefined} />
               </CardErrorBoundary>
             )}
             {cards.price_drift && (
@@ -178,6 +179,7 @@ export function App() {
                 <CompanyCard company={cards.company.payload} state={cards.company.state} flaggedKinds={settings.recordKinds} />
               </CardErrorBoundary>
             )}
+            {cards.item && <StatutoryRights purchaseTypes={purchaseTypes} />}
           </>
         )}
 

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <title>Checkout - Fernline Broadband</title>
+  <meta property="og:site_name" content="Fernline Broadband">
+</head>
+<body>
+<header><a href="/">Fernline</a> <span>Signed in as sweta@example.com</span></header>
+<main>
+  <h1>Review your order</h1>
+  <section class="order-summary">
+    <h2 class="plan-name">Full Fibre 500</h2>
+    <p>£29.99 a month for 24 months</p>
+    <p>24-month minimum term. Early termination charges apply if you leave before the end of your minimum term.</p>
+    <p>Price rises each April by £3.00 a month.</p>
+    <p>Set-up fee £0. Router included.</p>
+    <p>You have a 14-day cooling-off period.</p>
+    <p><a href="/docs/contract-summary-full-fibre-500.pdf">Contract summary (PDF)</a> · <a href="/legal/price-guide">Price guide</a></p>
+  </section>
+  <section class="your-details">
+    <h2>Your details</h2>
+    <p>Delivering to: Sweta Acharya, 1 High Street, Edinburgh EH1 1YZ</p>
+    <p>sweta@example.com</p>
+    <p>07700 900123</p>
+  </section>
+  <form action="/checkout/pay" method="post">
+    <label>Card number <input name="cardnumber" autocomplete="cc-number"></label>
+    <label>Expiry <input name="exp" autocomplete="cc-exp"></label>
+    <p>Paying with card ending 4242</p>
+    <button type="submit">Place order</button>
+  </form>
+</main>
+<footer>
+  <a href="/legal/terms-and-conditions">Terms and conditions</a>
+  <a href="/legal/cancellation-rights">Your cancellation rights</a>
+  <a href="/legal/privacy">Privacy</a>
+</footer>
+</body>
+</html>

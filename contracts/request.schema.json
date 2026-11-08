@@ -4,7 +4,7 @@
   "title": "AnalyseRequest",
   "description": "Body POSTed by the extension to /analyse",
   "type": "object",
-  "required": ["item", "purchase_type_signals", "links", "page_text_snippets", "install_id"],
+  "required": ["item", "purchase_type_signals", "links", "page_text_snippets"],
   "additionalProperties": false,
   "properties": {
     "item": {
@@ -44,6 +44,38 @@
       "type": "array",
       "items": { "type": "string" }
     },
-    "install_id": { "type": "string", "minLength": 1 }
+    "terms": {
+      "description": "T&C pages and PDFs fetched by the extension from the user's browser. Optional: omit it, or send an entry with fetch_failed true, and the backend falls back to search and labels the card.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/terms_document" },
+      "default": []
+    },
+    "install_id": { "type": "string", "minLength": 1, "description": "Deprecated: send the X-Install-Id header instead." }
+  },
+  "$defs": {
+    "terms_document": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url":  { "type": "string", "format": "uri" },
+        "kind": {
+          "type": "string",
+          "enum": ["terms", "returns", "warranty", "cancel", "subscription", "contract_summary", "price_guide", "privacy", "other"],
+          "default": "terms"
+        },
+        "text":         { "type": ["string", "null"], "maxLength": 500000, "description": "Page text, for HTML pages." },
+        "pdf_b64":      { "type": ["string", "null"], "maxLength": 20000000, "contentEncoding": "base64", "description": "Base64 PDF bytes, for PDFs." },
+        "fetch_failed": { "type": "boolean", "default": false },
+        "error":        { "type": ["string", "null"], "description": "Why the fetch failed, for display and logs." }
+      },
+      "if":   { "not": { "properties": { "fetch_failed": { "const": true } }, "required": ["fetch_failed"] } },
+      "then": {
+        "anyOf": [
+          { "required": ["text"],    "properties": { "text":    { "type": "string", "minLength": 1 } } },
+          { "required": ["pdf_b64"], "properties": { "pdf_b64": { "type": "string", "minLength": 1 } } }
+        ]
+      }
+    }
   }
 }

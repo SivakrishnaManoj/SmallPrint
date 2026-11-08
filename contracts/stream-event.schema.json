@@ -17,7 +17,7 @@
         },
         "state": {
           "type": "string",
-          "enum": ["found", "estimated", "not_found", "n_a"]
+          "enum": ["found", "estimated", "not_found", "n_a", "limit_reached"]
         },
         "payload": {
           "description": "The corresponding section of the response schema (object or array)",

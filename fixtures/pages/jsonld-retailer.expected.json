@@ -1,0 +1,54 @@
+{
+  "url": "https://www.brightwell-electrical.co.uk/products/ninja-af100uk-air-fryer-10215566.html?utm_source=google&gclid=abc",
+  "detection": {
+    "status": "purchase",
+    "detector": "jsonld",
+    "checkout": false,
+    "request": {
+      "item": {
+        "name": "Ninja AF100UK Air Fryer, 3.8 L - Grey",
+        "brand": "Ninja",
+        "price": 99,
+        "seller": "Brightwell Electrical",
+        "url": "https://www.brightwell-electrical.co.uk/products/ninja-af100uk-air-fryer-10215566.html",
+        "id": "10215566"
+      },
+      "purchase_type_signals": [
+        "product"
+      ],
+      "links": [
+        {
+          "url": "https://www.brightwell-electrical.co.uk/care-plans/terms",
+          "text": "Care plan terms",
+          "kind": "terms"
+        },
+        {
+          "url": "https://www.brightwell-electrical.co.uk/help/terms-and-conditions",
+          "text": "Terms & conditions",
+          "kind": "terms"
+        },
+        {
+          "url": "https://www.brightwell-electrical.co.uk/help/returns-and-cancellations",
+          "text": "Returns policy",
+          "kind": "returns"
+        },
+        {
+          "url": "https://www.brightwell-electrical.co.uk/help/guarantees",
+          "text": "Guarantee details",
+          "kind": "warranty"
+        },
+        {
+          "url": "https://www.brightwell-electrical.co.uk/help/privacy-and-cookies",
+          "text": "Privacy & cookies",
+          "kind": "privacy"
+        }
+      ],
+      "page_text_snippets": [
+        "Was \u00a3129.00. Save \u00a330.00. Price valid until 17 November.",
+        "Standard delivery \u00a34.99, free on orders over \u00a340.",
+        "Add a 3-year care plan for \u00a329.99, or \u00a31.99 a month. Care plan terms",
+        "2 year manufacturer guarantee included. Guarantee details"
+      ]
+    }
+  }
+}

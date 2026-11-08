@@ -1,0 +1,52 @@
+{
+  "url": "https://www.northgategyms.co.uk/join?utm_campaign=autumn",
+  "detection": {
+    "status": "purchase",
+    "detector": "wording",
+    "checkout": false,
+    "request": {
+      "item": {
+        "name": "Join Northgate Gym",
+        "brand": "Northgate Gyms",
+        "price": 24.99,
+        "seller": "Northgate Gyms",
+        "url": "https://www.northgategyms.co.uk/join",
+        "id": null
+      },
+      "purchase_type_signals": [
+        "subscription"
+      ],
+      "links": [
+        {
+          "url": "https://www.northgategyms.co.uk/terms-and-conditions",
+          "text": "Terms and conditions",
+          "kind": "terms"
+        },
+        {
+          "url": "https://www.northgategyms.co.uk/membership-terms",
+          "text": "Membership terms",
+          "kind": "subscription"
+        },
+        {
+          "url": "https://www.northgategyms.co.uk/cancel-membership",
+          "text": "How to cancel your membership",
+          "kind": "cancel"
+        },
+        {
+          "url": "https://www.northgategyms.co.uk/privacy-policy",
+          "text": "Privacy policy",
+          "kind": "privacy"
+        }
+      ],
+      "page_text_snippets": [
+        "Monthly membership",
+        "\u00a324.99 a month",
+        "Joining fee \u00a315, paid today",
+        "No long contract. Cancel any time with one month's notice.",
+        "Your membership renews automatically each month until you cancel.",
+        "Prices may change; we'll give you 30 days' notice.",
+        "Membership terms \u00b7 How to cancel your membership"
+      ]
+    }
+  }
+}

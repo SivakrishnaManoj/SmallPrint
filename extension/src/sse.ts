@@ -6,7 +6,8 @@
  * can stall or break ends in a thrown AnalyseError, so callers can always clear
  * their loading state in `finally`.
  */
-import type { AnalyseRequest, StreamCard } from "~panel/types";
+import type { StreamCard } from "~panel/types";
+import type { AnalyseBody } from "./config";
 
 export interface SSEMessage {
   event: string;
@@ -76,6 +77,8 @@ export class AnalyseError extends Error {
 }
 
 export interface StreamOptions {
+  /** Anonymous install UUID, sent as the X-Install-Id header. */
+  installId: string;
   signal?: AbortSignal;
   connectMs: number;
   idleMs: number;
@@ -99,12 +102,41 @@ function toStreamCard(data: string): StreamCard | null {
   return null;
 }
 
+/**
+ * The body is rebuilt from an allowlist of page-data fields (plus fetched T&C documents), so nothing about the user
+ * (install_id, postcode, settings) can leak in through a stray property.
+ */
+export function buildBody(req: AnalyseBody): AnalyseBody {
+  return {
+    item: req.item,
+    purchase_type_signals: req.purchase_type_signals,
+    links: req.links,
+    page_text_snippets: req.page_text_snippets,
+    // Optional T&C documents fetched in the browser (contracts/request.schema.json `terms`).
+    ...(req.terms ? { terms: req.terms } : {}),
+  };
+}
+
+/** Headers sent with /analyse. The install UUID is the only user-related value. */
+export function buildHeaders(url: string, installId: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+    "X-Install-Id": installId,
+  };
+  // ngrok's free tier answers browsers with an HTML interstitial unless this is set.
+  if (new URL(url).hostname.endsWith(".ngrok-free.app")) headers["ngrok-skip-browser-warning"] = "1";
+  return headers;
+}
+
 /** Yields each card as it arrives; returns normally on `event: done`, throws AnalyseError otherwise. */
 export async function* streamAnalyse(
   serverUrl: string,
-  request: AnalyseRequest,
+  request: AnalyseBody,
   opts: StreamOptions,
 ): AsyncGenerator<StreamCard, void, undefined> {
+  if (!opts.installId) throw new AnalyseError("http", "Missing install ID");
+
   const controller = new AbortController();
   let timeoutReason: string | null = null;
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -136,13 +168,10 @@ export async function* streamAnalyse(
     const url = `${serverUrl.replace(/\/+$/, "")}/analyse`;
     const response = await (opts.fetchImpl ?? fetch)(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-        // Without this, ngrok's free tier answers browsers with an HTML interstitial.
-        "ngrok-skip-browser-warning": "1",
-      },
-      body: JSON.stringify(request),
+      headers: buildHeaders(url, opts.installId),
+      body: JSON.stringify(buildBody(request)),
+      credentials: "omit", // no cookies for the backend's domain
+      referrerPolicy: "no-referrer",
       signal: controller.signal,
     }).catch((e) => { throw fail(e); });
     disarm("connect");

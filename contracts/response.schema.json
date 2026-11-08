@@ -9,7 +9,7 @@
   "$defs": {
     "card_state": {
       "type": "string",
-      "enum": ["found", "estimated", "not_found", "n_a"]
+      "enum": ["found", "estimated", "not_found", "n_a", "limit_reached"]
     },
     "evidence": {
       "type": "object",
@@ -75,7 +75,25 @@
         "notice_days":        { "type": ["integer", "null"] },
         "auto_renews":        { "type": ["boolean", "null"] },
         "cancel_method":      { "type": ["string", "null"] },
-        "proprietary_refills":{ "type": ["boolean", "null"] }
+        "proprietary_refills":{ "type": ["boolean", "null"] },
+        "evidence": {
+          "type": "array",
+          "description": "One entry per non-null field above. A value with no verified quote must be null (quote or null).",
+          "items": {
+            "type": "object",
+            "required": ["field", "quote", "url"],
+            "additionalProperties": false,
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": ["min_term_months", "exit_fee", "notice_days", "auto_renews", "cancel_method", "proprietary_refills"]
+              },
+              "quote": { "type": "string", "minLength": 1 },
+              "url":   { "type": "string", "minLength": 1 },
+              "source_step": { "type": ["string", "null"], "description": "Set when the quote came from a fallback source, e.g. tavily_search." }
+            }
+          }
+        }
       }
     },
     "small_print": {

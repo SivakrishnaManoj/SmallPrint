@@ -1,0 +1,9 @@
+# Store text files with LF line endings, whatever the editor or OS.
+* text=auto eol=lf
+
+# Binary files: never convert.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.sqlite binary
+*.xlsx binary

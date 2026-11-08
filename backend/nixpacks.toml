@@ -2,7 +2,7 @@
 nixPkgs = ["python311"]
 
 [phases.install]
-cmds = ["pip install fastapi uvicorn[standard] sse-starlette httpx jsonschema pydantic python-dotenv"]
+cmds = ["pip install fastapi uvicorn[standard] sse-starlette httpx jsonschema pydantic python-dotenv anthropic trafilatura pymupdf"]
 
 [start]
 cmd = "uvicorn server.main:app --host 0.0.0.0 --port $PORT"

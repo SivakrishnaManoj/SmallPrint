@@ -1,0 +1,6 @@
+page_url,terms_url,name
+# Example rows only. Johann supplies the real ~50 sites: copy this file to demo/prewarm.csv and fill it in.
+# Leave terms_url blank to let the server find the T&Cs with search (same site only).
+https://www.netflix.com/gb/,https://help.netflix.com/legal/termsofuse,Netflix
+https://www.puregym.com/,,PureGym
+https://www.amazon.co.uk/,,Amazon

@@ -1,10 +1,27 @@
 import { CardShell } from "./CardShell";
-import type { LockIn, CardState } from "../types";
+import { Evidence, hasEvidence } from "./Evidence";
+import type { LockIn, LockInField, CardState } from "../types";
 
 interface Props {
   lockIn: LockIn;
   state: CardState;
 }
+
+const yesNo = (v: boolean) => (v ? "Yes" : "No");
+
+/** Field order and how each value reads. */
+const FIELDS: { field: LockInField; label: string; show: (l: LockIn) => string | null }[] = [
+  { field: "min_term_months", label: "Minimum term", show: (l) => (l.min_term_months != null ? `${l.min_term_months} months` : null) },
+  { field: "exit_fee", label: "Exit fee", show: (l) => l.exit_fee ?? null },
+  { field: "notice_days", label: "Notice to cancel", show: (l) => (l.notice_days != null ? `${l.notice_days} days` : null) },
+  { field: "auto_renews", label: "Auto-renews", show: (l) => (l.auto_renews != null ? yesNo(l.auto_renews) : null) },
+  { field: "cancel_method", label: "How to cancel", show: (l) => l.cancel_method ?? null },
+  {
+    field: "proprietary_refills",
+    label: "Own-brand refills only",
+    show: (l) => (l.proprietary_refills != null ? yesNo(l.proprietary_refills) : null),
+  },
+];
 
 export function LockInCard({ lockIn, state }: Props) {
   if (state === "n_a") {
@@ -14,27 +31,27 @@ export function LockInCard({ lockIn, state }: Props) {
     return <CardShell title="Lock-in" state="not_found"><p>Lock-in information wasn't found for this item.</p></CardShell>;
   }
 
-  const rows: { label: string; value: string }[] = [];
-  if (lockIn.min_term_months != null) rows.push({ label: "Minimum term", value: `${lockIn.min_term_months} months` });
-  if (lockIn.exit_fee) rows.push({ label: "Exit fee", value: lockIn.exit_fee });
-  if (lockIn.notice_days != null) rows.push({ label: "Notice period", value: `${lockIn.notice_days} days` });
-  if (lockIn.auto_renews != null) rows.push({ label: "Auto-renews", value: lockIn.auto_renews ? "Yes" : "No" });
-  if (lockIn.cancel_method) rows.push({ label: "How to cancel", value: lockIn.cancel_method });
-  if (lockIn.proprietary_refills != null) rows.push({ label: "Proprietary refills", value: lockIn.proprietary_refills ? "Yes — only manufacturer refills" : "No" });
+  // Quote or null: each value is shown only with its own evidence entry.
+  const rows = FIELDS.flatMap(({ field, label, show }) => {
+    const value = show(lockIn);
+    const ev = lockIn.evidence?.find((e) => e.field === field && hasEvidence(e.quote, e.url));
+    return value != null && ev ? [{ field, label, value, quote: ev.quote, url: ev.url }] : [];
+  });
 
   return (
     <CardShell title="Lock-in" state={state}>
       {rows.length === 0 ? (
-        <p>No lock-in terms were found.</p>
+        <p>No lock-in terms were found with a quote from the source.</p>
       ) : (
-        <dl class="lock-in__list">
+        <ul class="lock-in__list">
           {rows.map((r) => (
-            <>
-              <dt>{r.label}</dt>
-              <dd>{r.value}</dd>
-            </>
+            <li key={r.field} class="lock-in__item" data-testid="lock-in-row">
+              <span class="lock-in__label">{r.label}</span>
+              <span class="lock-in__value">{r.value}</span>
+              <Evidence quote={r.quote} url={r.url} />
+            </li>
           ))}
-        </dl>
+        </ul>
       )}
     </CardShell>
   );

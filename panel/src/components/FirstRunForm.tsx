@@ -5,6 +5,9 @@ import { DEFAULT_SETTINGS } from "../types";
 
 interface Props {
   onComplete: (settings: Settings) => void;
+  /** Settings to start from. Pass the saved settings when the form is reopened from Settings. */
+  initial?: Settings;
+  title?: string;
 }
 
 const RECORD_KIND_OPTIONS = [
@@ -13,9 +16,9 @@ const RECORD_KIND_OPTIONS = [
   { id: "modern_slavery", label: "Modern slavery statements" },
 ];
 
-export function FirstRunForm({ onComplete }: Props) {
-  const [horizon, setHorizon] = useState<12 | 24>(12);
-  const [recordKinds, setRecordKinds] = useState<string[]>(DEFAULT_SETTINGS.recordKinds);
+export function FirstRunForm({ onComplete, initial = DEFAULT_SETTINGS, title = "Set up Small Print" }: Props) {
+  const [horizon, setHorizon] = useState<12 | 24>(initial.horizon);
+  const [recordKinds, setRecordKinds] = useState<string[]>(initial.recordKinds);
 
   function toggleKind(id: string) {
     setRecordKinds((prev) =>
@@ -38,7 +41,7 @@ export function FirstRunForm({ onComplete }: Props) {
 
   return (
     <div class="first-run">
-      <h1 class="first-run__title">Set up Small Print</h1>
+      <h1 class="first-run__title">{title}</h1>
       <p class="first-run__subtitle">Takes 30 seconds. You can change this any time.</p>
 
       <form onSubmit={handleSave} class="first-run__form">
