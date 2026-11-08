@@ -36,9 +36,17 @@ datasets.** All three are inserted with `ch_number = NULL` and a
    company's resolved **brand** and **parent** names.
 
 The name query only touches `ch_number IS NULL` rows, so a name match can never
-override, shadow or duplicate a CH-keyed record. Name matching runs **only after
-a company has been identified** (a CH number was found); an unidentified brand
-still returns "Brand not identified" with no records, exactly as before.
+override, shadow or duplicate a CH-keyed record.
+
+**The name join is not gated on a Companies House match.** The ethics datasets are
+largely foreign parents (PepsiCo, L'Oréal) that have no UK Companies House entry,
+so gating the name join behind CH identification would mean they never surface —
+which is exactly what happened in the first cut. When no CH number is found but an
+exact brand/parent name matches an ethics record, the company card is returned with
+`ch_number = null` and `match_via = "Brand name match"`. The pipeline marks that card
+`found` when it has a CH number **or** at least one record, so name-only matches
+render their records instead of "No public records matched". A brand that matches
+neither a CH number nor any record still returns "Brand not identified".
 
 **No fuzzy matching.** Exact, case-insensitive name equality only — a
 look-alike name can be a different legal entity. This is the same "quote or
@@ -57,8 +65,11 @@ with voting records opposing LGBTQ+ rights." — in keeping with the project's
 - The ethics datasets reach a company card only through an exact brand/parent
   name match. Coverage is therefore narrower and noisier than the CH-keyed
   kinds, and depends on the brand/parent the matcher resolves.
-- US brands can surface via the page brand name (e.g. "Amazon") once the
-  matcher identifies a company, which is the intended cross-reference.
+- Foreign brands with no UK Companies House entry (e.g. "Amazon", "PepsiCo",
+  "L'Oréal") surface via the resolved brand or parent name, which is the
+  intended cross-reference. The match is exact, so a product/sub-brand on the
+  page ("Pepsi Max") only matches when Wikidata resolves it to a parent
+  ("PepsiCo") that is in the data.
 - `records.sqlite` grows by ~50k rows (mostly the global SBTi set). The
   `idx_name` index already exists to keep name lookups fast.
 - The datasets are opt-in-visible through the existing values filter and are on

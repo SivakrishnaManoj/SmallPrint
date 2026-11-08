@@ -416,19 +416,32 @@ async def company_lookup(
                 ch = ch_num
                 via = "Companies House exact name"
 
-        if not ch:
-            return _not_identified(brand)
-
         from smallprint.asa import fetch_asa_rulings
         db_records = _load_records(ch, db_path, names=(brand, parent or ""))
-        asa_records = await fetch_asa_rulings(brand, parent=parent, http=http)
-        return {
-            "brand": brand,
-            "parent": parent,
-            "ch_number": ch,
-            "match_via": via,
-            "records": db_records + asa_records,
-        }
+
+        if ch:
+            asa_records = await fetch_asa_rulings(brand, parent=parent, http=http)
+            return {
+                "brand": brand,
+                "parent": parent,
+                "ch_number": ch,
+                "match_via": via,
+                "records": db_records + asa_records,
+            }
+
+        # No Companies House match. The ethics datasets (LGBTQ+ rights, abortion
+        # rights, climate) carry no CH number and are keyed on the exact brand or
+        # parent name, so they can still surface for a foreign parent that has no
+        # UK Companies House entry (e.g. PepsiCo, L'Oréal). ADR 0002.
+        if db_records:
+            return {
+                "brand": brand,
+                "parent": parent,
+                "ch_number": None,
+                "match_via": "Brand name match",
+                "records": db_records,
+            }
+        return _not_identified(brand)
 
     finally:
         if own_http:

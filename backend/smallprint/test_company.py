@@ -320,6 +320,34 @@ async def test_unknown_brand_returns_not_identified(db):
     assert result["brand"] == "Completely Unknown Brand Ltd"
 
 
+async def test_name_only_ethics_match_without_ch_number(db):
+    """A foreign parent with no UK CH entry still surfaces name-keyed ethics records (ADR 0002)."""
+    con = sqlite3.connect(db)
+    con.execute(
+        "INSERT INTO records (ch_number, company_name, kind, date, summary, source_url) VALUES (?,?,?,?,?,?)",
+        (None, "PepsiCo", "lgbtq_rights", None,
+         "Listed by Accountable for Equality as a corporate donor to US candidates "
+         "or committees with voting records opposing LGBTQ+ rights.", None),
+    )
+    con.commit()
+    con.close()
+
+    http, _ = _client({
+        "https://www.wikidata.org": _EMPTY_WIKIDATA,
+        "https://api.gleif.org":      _GLEIF_AUTOCOMPLETE_EMPTY,
+        "https://api.company-information.service.gov.uk": _CH_NO_MATCH,
+    })
+    async with http:
+        result = await company_lookup(
+            "PepsiCo", "https://www.pepsico.com",
+            http=http, db_path=db, ch_api_key="test-key",
+        )
+
+    assert result["ch_number"] is None
+    assert result["match_via"] == "Brand name match"
+    assert any(r["kind"] == "lgbtq_rights" for r in result["records"])
+
+
 async def test_ch_fallback_on_exact_name_match(db):
     http, transport = _client({
         "https://www.wikidata.org": _EMPTY_WIKIDATA,
