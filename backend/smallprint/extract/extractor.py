@@ -1,7 +1,7 @@
-"""T&C extractor: Haiku with constrained JSON for costs, lock-in and small print (S3, #13).
+"""T&C extractor: OpenAI model with constrained JSON for costs, lock-in and small print (S3, #13).
 
 Flow per document:
-  text -> chunks of ~6k tokens -> one Haiku call per chunk (JSON schema output)
+  text -> chunks of ~6k tokens -> one LLM call per chunk (JSON schema output)
   -> every field through the quote verifier against that chunk -> merge -> cards.
 
 Quote or null: a field reaches a card only if its quote is verbatim in the
@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from smallprint.spend import MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS, SpendLimitReached, SpendTracker
 from smallprint.tc_cache import TermsCache
@@ -26,7 +26,7 @@ from .text import CHUNK_TOKENS, chunk_text, estimate_tokens
 
 log = logging.getLogger(__name__)
 
-MODEL = "claude-haiku-5-5"
+MODEL = "gpt-4o-mini"
 
 # field -> JSON type of its value
 FIELDS: dict[str, str] = {
@@ -150,7 +150,7 @@ def verify_extraction(raw: dict[str, Any], source: str) -> dict[str, dict]:
 # LLM call
 # ---------------------------------------------------------------------------
 
-async def _extract_chunk(client: AsyncAnthropic, chunk: str, install_id: str | None,
+async def _extract_chunk(client: AsyncOpenAI, chunk: str, install_id: str | None,
                          tracker: SpendTracker | None, system: str | None = None,
                          schema: dict | None = None) -> dict[str, Any] | None:
     """The model's JSON for one chunk, or None if this chunk failed (refusal, cut off, bad JSON).
@@ -164,12 +164,15 @@ async def _extract_chunk(client: AsyncAnthropic, chunk: str, install_id: str | N
         raise ValueError("chunk exceeds the 8k input cap")
 
     async def call():
-        return await client.messages.create(
+        return await client.chat.completions.create(
             model=MODEL,
-            max_tokens=MAX_OUTPUT_TOKENS,
-            system=system,
-            messages=[{"role": "user", "content": f"<document>\n{chunk}\n</document>"}],
-            output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
+            max_completion_tokens=MAX_OUTPUT_TOKENS,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": f"<document>\n{chunk}\n</document>"},
+            ],
+            response_format={"type": "json_schema",
+                             "json_schema": {"name": "extraction", "strict": True, "schema": schema}},
         )
 
     if tracker is None:
@@ -178,13 +181,14 @@ async def _extract_chunk(client: AsyncAnthropic, chunk: str, install_id: str | N
         # Raises SpendLimitReached before the call if today's limit is used up.
         async with tracker.guard(install_id or "", input_tokens, MAX_OUTPUT_TOKENS) as usage:
             response = await call()
-            usage.input_tokens = response.usage.input_tokens
-            usage.output_tokens = response.usage.output_tokens
-    if response.stop_reason != "end_turn":
-        # refusal, max_tokens, ...: treat the chunk as giving nothing.
-        log.warning("extractor stop_reason=%s; chunk skipped", response.stop_reason)
+            usage.input_tokens = response.usage.prompt_tokens
+            usage.output_tokens = response.usage.completion_tokens
+    choice = response.choices[0]
+    if choice.finish_reason != "stop" or choice.message.refusal:
+        # refusal, length cut-off, content filter: treat the chunk as giving nothing.
+        log.warning("extractor finish_reason=%s; chunk skipped", choice.finish_reason)
         return None
-    text = next((b.text for b in response.content if b.type == "text"), None)
+    text = choice.message.content
     if not text:
         return None
     try:
@@ -204,7 +208,7 @@ class Document:
     source: str | None = None
 
 
-async def extract_fields(client: AsyncAnthropic, docs: list[Document], install_id: str | None = None,
+async def extract_fields(client: AsyncOpenAI, docs: list[Document], install_id: str | None = None,
                          tracker: SpendTracker | None = None,
                          cache: TermsCache | None = None) -> tuple[dict[str, dict], bool]:
     """Verified fields across all documents. First verified value per field wins.
@@ -327,7 +331,7 @@ def _as_text(value: Any) -> str:
     return str(value)
 
 
-async def analyse_documents(client: AsyncAnthropic, docs: list[Document], install_id: str | None = None,
+async def analyse_documents(client: AsyncOpenAI, docs: list[Document], install_id: str | None = None,
                             tracker: SpendTracker | None = None) -> dict:
     found, limit_reached = await extract_fields(client, docs, install_id, tracker)
     return build_cards(found, limit_reached)

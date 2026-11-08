@@ -1,6 +1,6 @@
 """S6 (#15) done when: fallback cards are labelled and linked.
 
-Real /analyse, real extractor and quote verifier. Anthropic and Tavily are faked at HTTP.
+Real /analyse, real extractor and quote verifier. OpenAI and Tavily are faked at HTTP.
 """
 from __future__ import annotations
 

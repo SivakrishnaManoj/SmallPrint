@@ -1,4 +1,4 @@
-"""S8 (#21): refill lookup. Anthropic (httpx2) and Tavily (httpx) are faked at HTTP."""
+"""S8 (#21): refill lookup. OpenAI (httpx2) and Tavily (httpx) are faked at HTTP."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,7 @@ import json
 import httpx
 import httpx2
 import pytest
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from smallprint.refill import (
     DEFAULT_USAGE, SOURCE, SOURCE_DEFAULT_USAGE, find_refill, verify_refill,
@@ -73,7 +73,7 @@ def test_bad_interval_or_pack_falls_back_safely():
 # --- the lookup end to end -----------------------------------------------
 
 class Fakes:
-    def __init__(self, llm_json: dict | None = GOOD, results: list[dict] | None = None, stop_reason: str = "end_turn"):
+    def __init__(self, llm_json: dict | None = GOOD, results: list[dict] | None = None, stop_reason: str = "stop"):
         self.llm_json, self.stop_reason = llm_json, stop_reason
         self.results = results if results is not None else [
             {"title": "Brush heads", "url": REFILL_URL, "content": "snippet", "score": 0.9, "raw_content": PAGE}]
@@ -83,9 +83,12 @@ class Fakes:
     def llm(self, request: httpx2.Request) -> httpx2.Response:
         self.llm_bodies.append(json.loads(request.content))
         return httpx2.Response(200, json={
-            "id": "m", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
-            "content": [] if self.stop_reason == "refusal" else [{"type": "text", "text": json.dumps(self.llm_json)}],
-            "stop_reason": self.stop_reason, "stop_sequence": None, "usage": {"input_tokens": 1500, "output_tokens": 200}})
+            "id": "c", "object": "chat.completion", "created": 0, "model": "gpt-4o-mini",
+            "choices": [{"index": 0, "finish_reason": "stop", "message": {
+                "role": "assistant",
+                "content": None if self.stop_reason == "refusal" else json.dumps(self.llm_json),
+                "refusal": "No." if self.stop_reason == "refusal" else None}}],
+            "usage": {"prompt_tokens": 1500, "completion_tokens": 200, "total_tokens": 1700}})
 
     def tavily(self, request: httpx.Request) -> httpx.Response:
         self.tavily_bodies.append(json.loads(request.content))
@@ -93,7 +96,7 @@ class Fakes:
                                          "results": self.results})
 
     def clients(self):
-        client = AsyncAnthropic(api_key="t", max_retries=0, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(self.llm)))
+        client = AsyncOpenAI(api_key="t", max_retries=0, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(self.llm)))
         search = TavilySearch("tvly-t", http=httpx.AsyncClient(transport=httpx.MockTransport(self.tavily)))
         return client, search
 
@@ -113,8 +116,8 @@ async def test_finds_the_refill_with_one_restricted_search_and_one_llm_call():
     body = f.tavily_bodies[0]
     assert body["include_domains"] == ["amazon.co.uk"]
     assert body["query"].startswith("Oral-B ")
-    assert f.llm_bodies[0]["model"] == "claude-haiku-5-5"
-    assert "character for character" in f.llm_bodies[0]["system"]
+    assert f.llm_bodies[0]["model"] == "gpt-4o-mini"
+    assert "character for character" in f.llm_bodies[0]["messages"][0]["content"]
     assert tracker.spent("i1") > 0  # charged to the install like any LLM call
 
 

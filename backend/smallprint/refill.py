@@ -7,7 +7,7 @@ blades, ...) and that consumable's price, with a source, and return it as a
 How:
   1. One Tavily search for the brand's refill, restricted to amazon.co.uk and
      the product page's own site.
-  2. Haiku reads each result page (first chunk only) and fills a fixed form.
+  2. The LLM reads each result page (first chunk only) and fills a fixed form.
      Every value needs a verbatim quote, checked by the quote verifier, and
      prices must appear as digits in their quote.
   3. The brand name must appear in the consumable's or the price's quote, so
@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from smallprint.extract.extractor import _extract_chunk, _field_schema, _number_in_quote
 from smallprint.extract.text import chunk_text
@@ -126,7 +126,7 @@ def verify_refill(raw: dict[str, Any], text: str, brand: str, url: str) -> dict 
     }
 
 
-async def find_refill(client: AsyncAnthropic, search: TavilySearch, *, name: str | None, brand: str | None,
+async def find_refill(client: AsyncOpenAI, search: TavilySearch, *, name: str | None, brand: str | None,
                       page_url: str, install_id: str, tracker: SpendTracker | None,
                       cache: TermsCache | None = None) -> dict | None:
     """The refill as a `usage` cost stream, or None ("Running costs: not estimated")."""
